@@ -1,0 +1,5 @@
+package com.communex.users;
+
+public enum Role {
+    USER, VOLUNTEER, ADMIN, ORGANIZER, MODERATOR, RESPONDER, FACILITY_MANAGER, ORGANIZATION_ADMIN
+}

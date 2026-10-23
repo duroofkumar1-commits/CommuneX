@@ -1,0 +1,7 @@
+import { useEffect,useState } from "react";
+import api,{errorMessage} from "../services/api";
+export default function Activity(){
+    const [items,setItems]=useState([]);
+    const [error,setError]=useState('');
+    useEffect(()=>{api.get('/activity').then(({data})=>setItems(Array.isArray(data)?data:[])).catch(e=>setError(errorMessage(e,'Could not load account activity.')))},[]);
+    return <div className="section-stack"><div className="page-heading"><div><p className="eyebrow">YOUR FOOTPRINT</p><h1>Activity history</h1><p>Review important actions recorded by CommuneX for your account.</p></div><span className="badge neutral">ACCOUNT LOG</span></div>{error&&<div className="status-message info">{error}</div>}<section className="surface panel"><div className="panel-title"><div><h2>Recent activity</h2><p>{items.length} recorded event(s)</p></div></div>{items.length===0?<div className="empty-state"><span className="empty-symbol">◷</span><h3>No activity records yet</h3><p>Important supported actions will appear here as the platform records them.</p></div>:<div className="data-list">{items.map(i=><article className="data-card" key={i.id}><div className="data-card-head"><div><h3>{i.action}</h3><p>{i.details||i.entityType||'Platform activity'}</p></div><span className="badge neutral">{i.entityType||'ACCOUNT'}</span></div><span className="data-meta">{i.createdAt?new Date(i.createdAt).toLocaleString():''}</span></article>)}</div>}</section></div>}

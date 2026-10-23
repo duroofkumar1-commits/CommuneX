@@ -1,0 +1,33 @@
+# Credentials and local environment
+.env
+.env.*
+!.env.example
+!.env.sample
+.neon
+
+# Generated dependencies/build output
+node_modules/
+**/node_modules/
+backend/target/
+**/target/
+frontend/dist/
+**/dist/
+coverage/
+playwright-report/
+test-results/
+
+# Local backups and reports
+backup-*/
+*-audit.txt
+*-report.txt
+project-files.txt
+project-structure.txt
+*.log
+*.backup
+*.bak
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

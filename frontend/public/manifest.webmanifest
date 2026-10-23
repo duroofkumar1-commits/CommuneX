@@ -1,0 +1,13 @@
+{
+  "name": "CommuneX — Smart Communities",
+  "short_name": "CommuneX",
+  "description": "Smart Communities. Connected Solutions.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#143b3c",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
