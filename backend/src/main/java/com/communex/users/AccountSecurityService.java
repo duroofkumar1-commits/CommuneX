@@ -50,7 +50,7 @@ public class AccountSecurityService {
         if (!email.isConfigured()) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "Email delivery is not configured. Set MAIL_HOST and mail credentials before requiring email verification."
+                    "Email delivery is not configured. Set EMAIL_RELAY_URL and EMAIL_RELAY_SECRET before requiring email verification."
             );
         }
 

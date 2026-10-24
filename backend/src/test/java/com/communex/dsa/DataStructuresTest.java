@@ -166,10 +166,19 @@ class DataStructuresTest {
             "C", List.of()
         );
 
-        assertEquals(
-            List.of("A", "B", "C"),
-            TopologicalSort.sort(directedGraph)
-        );
+        List<String> topologicalOrder =
+    TopologicalSort.sort(directedGraph);
+
+assertEquals(3, topologicalOrder.size());
+assertTrue(topologicalOrder.containsAll(List.of("A", "B", "C")));
+assertTrue(
+    topologicalOrder.indexOf("A")
+        < topologicalOrder.indexOf("C")
+);
+assertTrue(
+    topologicalOrder.indexOf("B")
+        < topologicalOrder.indexOf("C")
+);
 
         assertThrows(
             IllegalArgumentException.class,

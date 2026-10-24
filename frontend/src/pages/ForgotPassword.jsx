@@ -117,7 +117,7 @@ export default function ForgotPassword() {
             <Link to="/login">Back to sign in</Link>
           </p>
           <p className="muted small">
-            Email delivery requires SMTP settings in the backend environment.
+            Email delivery requires the backend email relay URL and secret to be configured.
           </p>
         </div>
       </section>
