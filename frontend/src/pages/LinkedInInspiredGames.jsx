@@ -30,8 +30,6 @@ const LADDERS = [
   ["FALL", "FILL", "FILE", "FIRE", "FIRM"],
   ["HARD", "HARE", "HIRE", "FIRE", "FIVE"],
 ];
-const TANGO_SOLUTION = ["001101", "011010", "110100", "101001", "010011", "100110"].map((row) => row.split("").map(Number));
-const QUEEN_SOLUTION = [1, 3, 5, 0, 2, 4];
 const SUDOKU_SOLUTION = Array.from({ length: 6 }, (_, r) => Array.from({ length: 6 }, (_, c) => ((r * 3 + Math.floor(r / 2) + c) % 6) + 1));
 const WEND_BANK = [
   { rows: ["CODE", "PATH", "NODE", "TREE"], words: ["CODE", "PATH", "NODE", "TREE"] },
@@ -40,10 +38,6 @@ const WEND_BANK = [
   { rows: ["NODE", "HEAP", "HASH", "LINK"], words: ["NODE", "HEAP", "HASH", "LINK"] },
 ];
 
-function rotate(array, amount) {
-  const n = ((amount % array.length) + array.length) % array.length;
-  return [...array.slice(n), ...array.slice(0, n)];
-}
 function shuffleBy(array, seed) {
   const result = [...array];
   let x = seed * 9301 + 49297;

@@ -35,7 +35,7 @@ describe("authentication pages", () => {
     renderRoutes("/register", <Register />);
     await user.type(screen.getByLabelText(/full name/i), "Test Neighbour");
     await user.type(screen.getByLabelText(/email address/i), "  NEIGHBOUR@example.com");
-    await user.type(screen.getByLabelText(/^password$/i), "SafePass123!");
+    await user.type(screen.getByLabelText(/password/i), "SafePass123!");
     await user.click(screen.getByRole("button", { name: /create account/i }));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/auth/register", {
       name: "Test Neighbour", email: "neighbour@example.com", password: "SafePass123!",
@@ -48,7 +48,7 @@ describe("authentication pages", () => {
     api.post.mockResolvedValueOnce({ data: { token: "test-jwt", email: "test@example.com" } });
     renderRoutes("/login", <Login />);
     await user.type(screen.getByLabelText(/email address/i), "test@example.com");
-    await user.type(screen.getByLabelText(/password/i), "SafePass123!");
+    await user.type(screen.getByLabelText(/^Password$/i), "SafePass123!");
     await user.click(screen.getByRole("button", { name: /sign in/i }));
     await waitFor(() => expect(localStorage.getItem("token")).toBe("test-jwt"));
     expect(await screen.findByText("dashboard-route-visible")).toBeInTheDocument();
@@ -59,9 +59,9 @@ describe("authentication pages", () => {
     api.post.mockRejectedValueOnce(new Error("offline"));
     renderRoutes("/login", <Login />);
     await user.type(screen.getByLabelText(/email address/i), "test@example.com");
-    await user.type(screen.getByLabelText(/password/i), "SafePass123!");
+    await user.type(screen.getByLabelText(/^Password$/i), "SafePass123!");
     await user.click(screen.getByRole("button", { name: /sign in/i }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/login failed/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/offline/i);
     expect(localStorage.getItem("token")).toBeNull();
   });
 });

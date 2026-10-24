@@ -191,7 +191,7 @@ async function fetchOsrmRoute(from, to, mode, signal) {
   }
 
   const rawBody = await response.text();
-  let data = null;
+  let data;
   try {
     data = rawBody ? JSON.parse(rawBody) : null;
   } catch {
@@ -289,7 +289,7 @@ async function fetchValhallaRoute(from, to, mode, signal) {
   }
 
   const rawBody = await response.text();
-  let data = null;
+  let data;
   try {
     data = rawBody ? JSON.parse(rawBody) : null;
   } catch {

@@ -67,7 +67,7 @@ function createChessBoard() {
 }
 function chessMoves(board, r, c) {
   const piece = board[r]?.[c]; if (!piece) return [];
-  const moves = []; const add = (nr, nc, sliding = false) => { if (nr < 0 || nr > 7 || nc < 0 || nc > 7) return false; const target = board[nr][nc]; if (!target) { moves.push([nr,nc]); return true; } if (target.color !== piece.color) moves.push([nr,nc]); return false; };
+  const moves = []; const add = (nr, nc) => { if (nr < 0 || nr > 7 || nc < 0 || nc > 7) return false; const target = board[nr][nc]; if (!target) { moves.push([nr,nc]); return true; } if (target.color !== piece.color) moves.push([nr,nc]); return false; };
   const dirs = piece.type === "rook" ? [[1,0],[-1,0],[0,1],[0,-1]] : piece.type === "bishop" ? [[1,1],[1,-1],[-1,1],[-1,-1]] : piece.type === "queen" || piece.type === "king" ? [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]] : [];
   if (piece.type === "pawn") { const d = piece.color === "white" ? -1 : 1; if (r + d >= 0 && r + d < 8 && !board[r + d][c]) { moves.push([r + d,c]); if ((piece.color === "white" && r === 6) || (piece.color === "black" && r === 1)) if (!board[r + d * 2][c]) moves.push([r + d * 2,c]); } for (const dc of [-1,1]) if (board[r + d]?.[c + dc] && board[r + d][c + dc].color !== piece.color) moves.push([r + d,c + dc]); }
   else if (piece.type === "knight") { [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]].forEach(([dr,dc]) => add(r + dr,c + dc)); }
@@ -263,7 +263,6 @@ function GameSurface({ game, level, onWin }) {
   },[game.id]);
   useEffect(()=>{ if(!["tetris","snake","pac-man","tower-defense"].includes(game.id))return undefined; const delay=game.id==="tetris"?Math.max(120,520-level*3):game.id==="snake"?Math.max(85,170-level):game.id==="pac-man"?210:300; const timer=window.setInterval(()=>setSession((prev)=>game.id==="tetris"?(prev.done?prev:(tetrisCollision(prev.board,prev.piece,0,1)?lockTetris(prev):{...prev,piece:{...prev.piece,y:prev.piece.y+1}})):game.id==="snake"?moveSnake(prev):game.id==="pac-man"?tickPacman(prev):tickTower(prev)),delay);return()=>window.clearInterval(timer);},[game.id,level]);
   const reset=()=>{reportedRef.current=false;setSession(createSession(game.id,level));};
-  const finishManually=(score=100)=>setSession((prev)=>prev.done?prev:{...prev,done:true,won:true,score:prev.score+score,status:"Level complete!"});
   const update=(fn)=>setSession((prev)=>fn(prev));
   const handleDirection=(direction)=>{
     const delta={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[direction];
