@@ -15,7 +15,10 @@ export default function GoogleSignInButton({
 
   const [ready, setReady] = useState(false);
 
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
+  console.log(
+  "Google Client ID configured:",
+  Boolean(clientId)
+);
 
   // Keep the latest callbacks without reinitializing Google's global SDK.
   useEffect(() => {
