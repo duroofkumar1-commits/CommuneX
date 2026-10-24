@@ -7,6 +7,9 @@ import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,6 +19,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AccountSecurityService {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(AccountSecurityService.class);
 
     private final UserRepository users;
     private final AccountActionTokenRepository tokens;
@@ -83,12 +89,28 @@ public class AccountSecurityService {
     @Transactional
     public void requestPasswordReset(String rawEmail) {
 
-        if (!email.isConfigured() || rawEmail == null || rawEmail.isBlank()) {
+        if (rawEmail == null || rawEmail.isBlank()) {
+            log.warn("Password reset skipped: blank email provided");
+            return;
+        }
+
+        boolean relayConfigured = email.isConfigured();
+
+        if (!relayConfigured) {
+            log.error(
+                    "Password reset skipped: email relay is not configured"
+            );
             return;
         }
 
         Optional<User> user = users.findByEmail(
                 rawEmail.trim().toLowerCase()
+        );
+
+        log.info(
+                "Password reset diagnostics: relayConfigured={}, accountMatched={}",
+                relayConfigured,
+                user.isPresent()
         );
 
         user.ifPresent(existingUser ->
@@ -203,10 +225,27 @@ public class AccountSecurityService {
                 + "\n\nIf you did not request this, you can ignore this email."
                 + "\n\nCommuneX";
 
-        // Send the email
+        // Send the email and record diagnostic results
         try {
+            log.info(
+                    "Attempting email relay delivery: purpose={}",
+                    purpose
+            );
+
             email.send(user.getEmail(), subject, body);
+
+            log.info(
+                    "Email relay call returned successfully: purpose={}",
+                    purpose
+            );
+
         } catch (RuntimeException ex) {
+
+            log.error(
+                    "Email relay delivery failed: purpose={}, errorType={}",
+                    purpose,
+                    ex.getClass().getSimpleName()
+            );
 
             token.setConsumedAt(LocalDateTime.now());
             tokens.save(token);
