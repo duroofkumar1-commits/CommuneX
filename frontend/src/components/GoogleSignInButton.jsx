@@ -1,6 +1,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
+const clientId =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
+
 const GOOGLE_SCRIPT_ID = "google-identity-services";
 const GOOGLE_CALLBACKS_KEY = "__communexGoogleCallbacks";
 const GOOGLE_CLIENT_KEY = "__communexGoogleInitializedClientId";
@@ -15,12 +18,7 @@ export default function GoogleSignInButton({
 
   const [ready, setReady] = useState(false);
 
-  console.log(
-  "Google Client ID configured:",
-  Boolean(clientId)
-);
-
-  // Keep the latest callbacks without reinitializing Google's global SDK.
+  // Keep the latest callbacks without reinitializing Google's SDK.
   useEffect(() => {
     callbacksRef.current = {
       onCredential,
@@ -52,7 +50,7 @@ export default function GoogleSignInButton({
 
       window[GOOGLE_CALLBACKS_KEY] = callbacksRef;
 
-      // Initialize once per client ID, including React StrictMode remounts.
+      // Initialize once per client ID.
       if (previouslyInitializedClientId !== clientId) {
         window.google.accounts.id.initialize({
           client_id: clientId,
@@ -174,7 +172,7 @@ export default function GoogleSignInButton({
         );
       }
     };
-  }, [clientId]);
+  }, []);
 
   if (!clientId) {
     return (
@@ -185,7 +183,7 @@ export default function GoogleSignInButton({
           disabled={disabled}
           onClick={() =>
             callbacksRef.current.onError?.(
-              "Google sign-in setup required: configure VITE_GOOGLE_CLIENT_ID in frontend/.env.local."
+              "Google sign-in setup required: configure VITE_GOOGLE_CLIENT_ID in the frontend build environment."
             )
           }
         >
