@@ -1,20 +1,36 @@
 import axios from "axios";
 
-const apiBaseURL = (
-  import.meta.env.VITE_API_URL || "/api"
-).replace(/\/+$/, "");
-
 const api = axios.create({
-  baseURL: apiBaseURL,
-  headers: { "Content-Type": "application/json" },
+  baseURL: "/api",
+  headers: {
+    "Content-Type": "application/json",
+  },
   timeout: 20000,
 });
 
+const publicAuthPaths = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/google",
+  "/auth/verify-email",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/resend-verification",
+];
+
 api.interceptors.request.use((config) => {
+  const path = config.url || "";
+
+  const isPublicAuthRoute = publicAuthPaths.some(
+    (route) => path.startsWith(route)
+  );
+
   const token = localStorage.getItem("token");
-  if (token) {
+
+  if (token && !isPublicAuthRoute) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
   return config;
 });
 
@@ -26,10 +42,12 @@ api.interceptors.response.use(
       localStorage.getItem("token")
     ) {
       localStorage.removeItem("token");
+
       window.dispatchEvent(
         new CustomEvent("communex:session-expired")
       );
     }
+
     return Promise.reject(error);
   }
 );
@@ -40,9 +58,17 @@ export function errorMessage(
 ) {
   const data = error?.response?.data;
 
-  if (typeof data?.detail === "string") return data.detail;
-  if (typeof data?.message === "string") return data.message;
-  if (typeof data?.error === "string") return data.error;
+  if (typeof data?.detail === "string") {
+    return data.detail;
+  }
+
+  if (typeof data?.message === "string") {
+    return data.message;
+  }
+
+  if (typeof data?.error === "string") {
+    return data.error;
+  }
 
   if (error?.code === "ECONNABORTED") {
     return "The server took too long to respond.";
