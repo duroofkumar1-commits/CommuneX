@@ -20,14 +20,14 @@ services:
       context: ./backend
     environment:
       PORT: 8080
-      DATABASE_URL: jdbc:postgresql://database:5432/communex
-      DATABASE_USERNAME: ${DATABASE_USERNAME:-communex}
+      DATABASE_URL: jdbc:postgresql://ep-cold-surf-b4l4kp91-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-neondb_owner}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in the root .env file}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the root .env file}
       JWT_EXPIRATION: 3600000
       FLYWAY_ENABLED: "true"
       DDL_AUTO: update
-      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,
       COMMUNEX_AI_BASE_URL: ""
       COMMUNEX_AI_MODEL: llama3.2
       EMAIL_VERIFICATION_REQUIRED: "false"

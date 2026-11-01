@@ -1,19 +1,13 @@
 package com.communex.common;
 
-import com.communex.facilities.FacilityService;
-import com.communex.facilities.dto.FacilityResponse;
-import com.communex.resources.ResourceService;
-import com.communex.resources.dto.ResourceResponse;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
@@ -22,10 +16,24 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
+
+import com.communex.facilities.FacilityService;
+import com.communex.facilities.dto.FacilityResponse;
+import com.communex.resources.ResourceService;
+import com.communex.resources.dto.ResourceResponse;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 @RestController
 @RequestMapping("/api/assistant")
 public class AssistantController {
+
+    private static final Logger log = LoggerFactory.getLogger(AssistantController.class);
 
     private final FacilityService facilities;
     private final ResourceService resources;
@@ -34,6 +42,9 @@ public class AssistantController {
 
     private final String aiBaseUrl;
     private final String aiModel;
+    private final String aiProvider;
+    private final String groqApiKey;
+    private final String groqBaseUrl;
 
     // Constructor
     public AssistantController(
@@ -41,13 +52,19 @@ public class AssistantController {
             ResourceService resources,
             ObjectMapper mapper,
             @Value("${communex.ai.base-url:}") String aiBaseUrl,
-            @Value("${communex.ai.model:llama3.2}") String aiModel
+            @Value("${communex.ai.model:openai/gpt-oss-20b}") String aiModel,
+            @Value("${communex.ai.provider:groq}") String aiProvider,
+            @Value("${communex.ai.groq-api-key:}") String groqApiKey,
+            @Value("${communex.ai.groq-base-url:https://api.groq.com/openai/v1}") String groqBaseUrl
     ) {
         this.facilities = facilities;
         this.resources = resources;
         this.mapper = mapper;
         this.aiBaseUrl = aiBaseUrl;
         this.aiModel = aiModel;
+        this.aiProvider = aiProvider;
+        this.groqApiKey = groqApiKey;
+        this.groqBaseUrl = groqBaseUrl;
         this.restClient = RestClient.create();
     }
 
@@ -147,23 +164,33 @@ public class AssistantController {
             );
         }
 
-        // Use the optional local language model for general questions
-        String answer = callOptionalLocalModel(message);
+        // General questions use GroqCloud by default. Platform-specific questions
+        // above continue to use controlled CommuneX backend data.
+        String answer;
+        String source;
+        if ("groq".equalsIgnoreCase(aiProvider)) {
+            answer = callGroqModel(message);
+            source = "GroqCloud API (" + aiModel + ")";
+        } else if ("ollama".equalsIgnoreCase(aiProvider)) {
+            answer = callOptionalLocalModel(message);
+            source = "Locally configured Ollama model: " + aiModel;
+        } else {
+            log.warn("Unsupported CommuneX AI provider configured: {}", aiProvider);
+            answer = null;
+            source = "CommuneX Assistant configuration";
+        }
 
         if (answer != null && !answer.isBlank()) {
-            return new ChatResponse(
-                    answer,
-                    List.of("Locally configured Ollama model: " + aiModel)
-            );
+            return new ChatResponse(answer, List.of(source));
         }
 
         // Default response when no language model is available
         return new ChatResponse(
                 "I can help you navigate CommuneX and search its current "
-                        + "facility/resource records. For general AI chat, "
-                        + "configure a local Ollama model using "
-                        + "COMMUNEX_AI_BASE_URL and COMMUNEX_AI_MODEL; no "
-                        + "hosted paid API is required by default. Available "
+                        + "facility/resource records. General AI chat is not "
+                        + "available right now; check GROQ_API_KEY, the selected "
+                        + "Groq model, network connection and your Groq free-plan limits. "
+                        + "You can alternatively configure a local Ollama model. Available "
                         + "platform tools include facility lookup, inventory "
                         + "lookup, help-request guidance, volunteer guidance "
                         + "and map guidance. I don't have a configured "
@@ -283,6 +310,67 @@ public class AssistantController {
                 + " " + resource.unit()
                 + " — " + resource.status()
                 + " (recorded location: " + location + ")";
+    }
+
+    // Call GroqCloud through the backend. The API key is never sent to the browser.
+    private String callGroqModel(String message) {
+        if (groqApiKey == null || groqApiKey.isBlank()
+                || groqApiKey.startsWith("YOUR_")) {
+            log.warn("Groq is selected but GROQ_API_KEY is missing or still a placeholder.");
+            return null;
+        }
+
+        if (groqBaseUrl == null || groqBaseUrl.isBlank()) {
+            log.warn("Groq is selected but COMMUNEX_AI_GROQ_BASE_URL is blank.");
+            return null;
+        }
+
+        try {
+            String systemInstruction = "You are CommuneX Assistant, a helpful assistant "
+                    + "for a community platform. Answer general questions clearly. "
+                    + "Do not claim you have searched CommuneX records unless the backend "
+                    + "provided them. Do not invent facility availability, inventory, "
+                    + "routes, emergency information, or local facts. Do not claim to "
+                    + "submit requests, change accounts, or perform actions. For real "
+                    + "emergencies, advise contacting official local emergency services.";
+
+            Map<String, Object> body = Map.of(
+                    "model", aiModel,
+                    "messages", List.of(
+                            Map.of("role", "system", "content", systemInstruction),
+                            Map.of("role", "user", "content", message)
+                    ),
+                    "max_completion_tokens", 800
+            );
+
+            String baseUrl = groqBaseUrl.replaceAll("/+$", "");
+            String response = restClient.post()
+                    .uri(baseUrl + "/chat/completions")
+                    .header("Authorization", "Bearer " + groqApiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(String.class);
+
+            JsonNode node = mapper.readTree(response);
+            String answer = node.path("choices").path(0)
+                    .path("message").path("content").asText(null);
+            return answer == null || answer.isBlank() ? null : answer.trim();
+
+        } catch (RestClientResponseException exception) {
+            // Log provider status and a bounded error body, never request headers or API key.
+            String providerError = exception.getResponseBodyAsString();
+            if (providerError != null && providerError.length() > 1000) {
+                providerError = providerError.substring(0, 1000);
+            }
+            log.warn("Groq API returned HTTP {}. Provider response: {}",
+                    exception.getStatusCode().value(), providerError);
+            return null;
+        } catch (Exception exception) {
+            log.warn("Groq API call failed: {} - {}",
+                    exception.getClass().getSimpleName(), exception.getMessage());
+            return null;
+        }
     }
 
     // Call the optional locally configured Ollama model
