@@ -46,7 +46,7 @@ export default function Login() {
     setBusy(true);
 
     try {
-      // This endpoint must exist in the Spring Boot backend and accept { credential }.
+  
       const { data } = await api.post("/auth/google", { credential });
 
       if (!data?.token) {

@@ -1,330 +1,2387 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api, { errorMessage } from "../services/api";
 import "./games.css";
-
+import { countSudokuSolutions, findBestChessMove, getWordleFeedback, MinPriorityQueue, solveGridPath, solvePortalPath, solveSudoku } from "../utils/dsa/arcadeAlgorithms";
 const MAX_LEVEL = 100;
-const GAME_CATALOG = [
-  { id: "tetris", title: "Tetris: Blockfall", genre: "BLOCK PUZZLE", icon: "🧱", accent: "#65e5cf", desc: "Rotate, stack and clear falling shapes before the board fills up.", dsa: "2D matrices · queues · collision checks", controls: "← / → move · ↑ rotate · ↓ soft drop · Space hard drop", objective: "Clear the required lines before the stack reaches the top." },
-  { id: "pac-man", title: "Maze Chase", genre: "MAZE ARCADE", icon: "🟡", accent: "#f5d66f", desc: "Sweep the maze for every energy pellet while roaming sentinels close in.", dsa: "Grid graphs · BFS pathfinding · state machines", controls: "Arrow keys / WASD move through the maze", objective: "Collect every pellet and avoid the roaming sentinels." },
-  { id: "chess", title: "Chess Arena", genre: "STRATEGY", icon: "♟️", accent: "#d5b5ff", desc: "Outplay a tactical opponent on an 8×8 board.", dsa: "2D arrays · move generation · game trees", controls: "Click a piece, then click a legal destination", objective: "Capture the opposing king. This arcade ruleset omits castling and en passant." },
-  { id: "blockcraft", title: "Blockcraft", genre: "SANDBOX BUILDER", icon: "🌲", accent: "#a8e18a", desc: "Harvest terrain resources and build a tiny settlement tile by tile.", dsa: "Grids · hash maps · resource inventory", controls: "Choose a build item, then click a tile to harvest or place it", objective: "Gather materials and complete the level's build quota." },
-  { id: "snake", title: "Snake", genre: "ARCADE CLASSIC", icon: "🐍", accent: "#7ee7a4", desc: "Guide the growing snake, collect fruit and avoid your own trail.", dsa: "Queues · linked-list style body updates · collision detection", controls: "Arrow keys / WASD steer the snake", objective: "Collect enough fruit to reach the target length." },
-  { id: "sudoku", title: "Sudoku Lab", genre: "LOGIC PUZZLE", icon: "🔢", accent: "#85c7ff", desc: "Fill every row, column and 3×3 region with the digits 1–9.", dsa: "Backtracking · constraint validation · 2D matrices", controls: "Select a cell, then choose a number; use Clear to erase", objective: "Complete the grid without changing the given clues." },
-  { id: "tower-defense", title: "Tower Defense", genre: "DEFENSE STRATEGY", icon: "🛡️", accent: "#b9a5ff", desc: "Place turrets beside the route and stop incoming waves.", dsa: "Graphs · priority targeting · queues", controls: "Click a build tile to place a turret; towers fire automatically", objective: "Defeat every wave before the base runs out of integrity." },
-  { id: "2048", title: "2048 Merge", genre: "NUMBER PUZZLE", icon: "🔶", accent: "#ffb87c", desc: "Slide matching tiles together and build larger powers of two.", dsa: "2D arrays · merge passes · state transitions", controls: "Arrow keys / WASD slide the board", objective: "Create the target tile for the current level." },
-  { id: "rubiks-cube", title: "Cube Twist", genre: "3D-INSPIRED PUZZLE", icon: "🧊", accent: "#82d9ff", desc: "Twist cube faces and restore each face to a single colour.", dsa: "Permutation arrays · state-space search", controls: "Click a face to turn clockwise; use ↶ to turn counter-clockwise", objective: "Restore all six faces to their solved colours." },
-  { id: "portal-puzzle", title: "Portal Puzzle", genre: "SPATIAL PUZZLE", icon: "🌀", accent: "#c5a5ff", desc: "Navigate connected portal gates, avoid walls and reach the exit.", dsa: "Graph traversal · node linking · grid search", controls: "Arrow keys / WASD move; portal tiles teleport instantly", objective: "Reach the exit tile using the linked portals." },
-  { id: "wordle", title: "Word Grid", genre: "WORD PUZZLE", icon: "🔤", accent: "#9ce5a8", desc: "Crack the hidden five-letter word with colour-coded feedback.", dsa: "Hash sets · string matching · frequency maps", controls: "Type a five-letter word and press Enter / Guess", objective: "Find the hidden word in six guesses or fewer." },
-  { id: "minesweeper", title: "Minesweeper", genre: "LOGIC / SEARCH", icon: "💣", accent: "#ff9c9c", desc: "Reveal safe cells, read number clues and flag hidden mines.", dsa: "2D arrays · BFS flood fill · neighbour counting", controls: "Click to reveal · right-click to flag a suspected mine", objective: "Reveal every safe cell without opening a mine." },
-  { id: "candy-match", title: "Candy Match", genre: "MATCH THREE", icon: "🍬", accent: "#ff9dc9", desc: "Swap neighbouring gems, create matches and chain clear combos.", dsa: "2D grids · pattern matching · array compaction", controls: "Click one gem, then an adjacent gem to swap", objective: "Reach the level's match score before running out of turns." },
-  { id: "city-builder", title: "Pocket City", genre: "CITY BUILDER", icon: "🏙️", accent: "#8dd9d1", desc: "Lay roads and grow a neighbourhood with homes, parks and services.", dsa: "Graphs · connected components · priority queues", controls: "Choose a structure, then click an empty tile to build", objective: "Connect homes to roads and reach the population goal." },
-  { id: "solitaire", title: "Solitaire", genre: "CARD STRATEGY", icon: "🂡", accent: "#f1d28d", desc: "Sort the deck into suit foundations using classic tableau rules.", dsa: "Stacks · linked sequences · backtracking moves", controls: "Draw from stock; click a face-up card and a destination pile", objective: "Move all 52 cards into the four suit foundations." },
-  { id: "maze-solver", title: "Maze Solver", genre: "PATHFINDING LAB", icon: "🧭", accent: "#91b6ff", desc: "Explore a generated maze or watch BFS, DFS, Dijkstra and A* find a route.", dsa: "Graphs · BFS · DFS · Dijkstra · A*", controls: "Arrow keys / WASD move; choose an algorithm to visualise a path", objective: "Reach the exit or use a pathfinding algorithm to solve the maze." },
-];
-
+const GAME_CATALOG = [{
+  id: "tetris",
+  title: "Tetris: Blockfall",
+  genre: "BLOCK PUZZLE",
+  icon: "🧱",
+  accent: "#65e5cf",
+  desc: "Rotate, stack and clear falling shapes before the board fills up.",
+  dsa: "2D matrices · collision detection · line compaction",
+  controls: "← / → move · ↑ rotate · ↓ soft drop · Space hard drop",
+  objective: "Clear the required lines before the stack reaches the top."
+}, {
+  id: "pac-man",
+  title: "Maze Chase",
+  genre: "MAZE ARCADE",
+  icon: "🟡",
+  accent: "#f5d66f",
+  desc: "Sweep the maze for every energy pellet while roaming sentinels close in.",
+  dsa: "Grid graphs · BFS ghost pathfinding · state machines",
+  controls: "Arrow keys / WASD move through the maze",
+  objective: "Collect every pellet and avoid the roaming sentinels."
+}, {
+  id: "chess",
+  title: "Chess Arena",
+  genre: "STRATEGY",
+  icon: "♟️",
+  accent: "#d5b5ff",
+  desc: "Outplay a tactical opponent on an 8×8 board.",
+  dsa: "2D arrays · move generation · alpha-beta minimax",
+  controls: "Click a piece, then click a legal destination",
+  objective: "Capture the opposing king. This arcade ruleset omits castling and en passant."
+}, {
+  id: "blockcraft",
+  title: "Blockcraft",
+  genre: "SANDBOX BUILDER",
+  icon: "🌲",
+  accent: "#a8e18a",
+  desc: "Harvest terrain resources and build a tiny settlement tile by tile.",
+  dsa: "Grid traversal · resource counters · state updates",
+  controls: "Choose a build item, then click a tile to harvest or place it",
+  objective: "Gather materials and complete the level's build quota."
+}, {
+  id: "snake",
+  title: "Snake",
+  genre: "ARCADE CLASSIC",
+  icon: "🐍",
+  accent: "#7ee7a4",
+  desc: "Guide the growing snake, collect fruit and avoid your own trail.",
+  dsa: "Arrays · head/tail updates · collision detection",
+  controls: "Arrow keys / WASD steer the snake",
+  objective: "Collect enough fruit to reach the target length."
+}, {
+  id: "sudoku",
+  title: "Sudoku Lab",
+  genre: "LOGIC PUZZLE",
+  icon: "🔢",
+  accent: "#85c7ff",
+  desc: "Fill every row, column and 3×3 region with the digits 1–9.",
+  dsa: "Backtracking solver · bit-mask constraints · 2D matrices",
+  controls: "Select a cell, then choose a number; use Clear to erase",
+  objective: "Complete the grid without changing the given clues."
+}, {
+  id: "tower-defense",
+  title: "Tower Defense",
+  genre: "DEFENSE STRATEGY",
+  icon: "🛡️",
+  accent: "#b9a5ff",
+  desc: "Place turrets beside the route and stop incoming waves.",
+  dsa: "Grid graph · BFS route planning · min-priority queue targeting",
+  controls: "Click a build tile to place a turret; towers fire automatically",
+  objective: "Defeat every wave before the base runs out of integrity."
+}, {
+  id: "2048",
+  title: "2048 Merge",
+  genre: "NUMBER PUZZLE",
+  icon: "🔶",
+  accent: "#ffb87c",
+  desc: "Slide matching tiles together and build larger powers of two.",
+  dsa: "2D arrays · merge passes · state transitions",
+  controls: "Arrow keys / WASD slide the board",
+  objective: "Create the target tile for the current level."
+}, {
+  id: "rubiks-cube",
+  title: "Cube Twist",
+  genre: "3D-INSPIRED PUZZLE",
+  icon: "🧊",
+  accent: "#82d9ff",
+  desc: "Twist cube faces and restore each face to a single colour.",
+  dsa: "Permutation arrays · face rotations · solved-state validation",
+  controls: "Click a face to turn clockwise; use ↶ to turn counter-clockwise",
+  objective: "Restore all six faces to their solved colours."
+}, {
+  id: "portal-puzzle",
+  title: "Portal Puzzle",
+  genre: "SPATIAL PUZZLE",
+  icon: "🌀",
+  accent: "#c5a5ff",
+  desc: "Navigate connected portal gates, avoid walls and reach the exit.",
+  dsa: "Grid graph · portal-aware BFS · shortest-step route",
+  controls: "Arrow keys / WASD move; portal tiles teleport instantly",
+  objective: "Reach the exit tile using the linked portals."
+}, {
+  id: "wordle",
+  title: "Word Grid",
+  genre: "WORD PUZZLE",
+  icon: "🔤",
+  accent: "#9ce5a8",
+  desc: "Crack the hidden five-letter word with colour-coded feedback.",
+  dsa: "Strings · frequency maps · duplicate-aware letter matching",
+  controls: "Type a five-letter word and press Enter / Guess",
+  objective: "Find the hidden word in six guesses or fewer."
+}, {
+  id: "minesweeper",
+  title: "Minesweeper",
+  genre: "LOGIC / SEARCH",
+  icon: "💣",
+  accent: "#ff9c9c",
+  desc: "Reveal safe cells, read number clues and flag hidden mines.",
+  dsa: "2D arrays · BFS flood fill · neighbour counting",
+  controls: "Click to reveal · right-click to flag a suspected mine",
+  objective: "Reveal every safe cell without opening a mine."
+}, {
+  id: "candy-match",
+  title: "Candy Match",
+  genre: "MATCH THREE",
+  icon: "🍬",
+  accent: "#ff9dc9",
+  desc: "Swap neighbouring gems, create matches and chain clear combos.",
+  dsa: "2D grids · pattern matching · array compaction",
+  controls: "Click one gem, then an adjacent gem to swap",
+  objective: "Reach the level's match score before running out of turns."
+}, {
+  id: "city-builder",
+  title: "Pocket City",
+  genre: "CITY BUILDER",
+  icon: "🏙️",
+  accent: "#8dd9d1",
+  desc: "Lay roads and grow a neighbourhood with homes, parks and services.",
+  dsa: "Road graph · BFS connected network · population recomputation",
+  controls: "Choose a structure, then click an empty tile to build",
+  objective: "Connect homes to roads and reach the population goal."
+}, {
+  id: "solitaire",
+  title: "Solitaire",
+  genre: "CARD STRATEGY",
+  icon: "🂡",
+  accent: "#f1d28d",
+  desc: "Sort the deck into suit foundations using classic tableau rules.",
+  dsa: "Stacks · array-based tableau piles · legal-move checks",
+  controls: "Draw from stock; click a face-up card and a destination pile",
+  objective: "Move all 52 cards into the four suit foundations."
+}, {
+  id: "maze-solver",
+  title: "Maze Solver",
+  genre: "PATHFINDING LAB",
+  icon: "🧭",
+  accent: "#91b6ff",
+  desc: "Explore a generated maze or watch BFS, DFS, Dijkstra and A* find a route.",
+  dsa: "Graphs · BFS · DFS · Dijkstra · A*",
+  controls: "Arrow keys / WASD move; choose an algorithm to visualise a path",
+  objective: "Reach the exit or use a pathfinding algorithm to solve the maze."
+}];
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-const seeded = (seed) => { let value = (seed * 9301 + 49297) % 233280; return () => { value = (value * 9301 + 49297) % 233280; return value / 233280; }; };
-const copyGrid = (grid) => grid.map((row) => row.slice());
+const seeded = seed => {
+  let value = (seed * 9301 + 49297) % 233280;
+  return () => {
+    value = (value * 9301 + 49297) % 233280;
+    return value / 233280;
+  };
+};
+const copyGrid = grid => grid.map(row => row.slice());
 const samePos = (a, b) => Boolean(a && b && a.x === b.x && a.y === b.y);
-
-const TETROMINOES = [
-  [[1, 1, 1, 1]], [[1, 0, 0], [1, 1, 1]], [[0, 0, 1], [1, 1, 1]],
-  [[1, 1], [1, 1]], [[0, 1, 1], [1, 1, 0]], [[0, 1, 0], [1, 1, 1]], [[1, 1, 0], [0, 1, 1]],
-];
+const TETROMINOES = [[[1, 1, 1, 1]], [[1, 0, 0], [1, 1, 1]], [[0, 0, 1], [1, 1, 1]], [[1, 1], [1, 1]], [[0, 1, 1], [1, 1, 0]], [[0, 1, 0], [1, 1, 1]], [[1, 1, 0], [0, 1, 1]]];
 const TETRIS_COLORS = ["#54d7f2", "#7d8cff", "#ffb46b", "#f8d36f", "#78e3a3", "#c59aff", "#ff8dba"];
-function randomPiece() { const type = Math.floor(Math.random() * TETROMINOES.length); return { shape: TETROMINOES[type].map((row) => row.slice()), color: TETRIS_COLORS[type], x: 3, y: 0 }; }
-function emptyTetrisBoard() { return Array.from({ length: 20 }, () => Array(10).fill(null)); }
-function tetrisCollision(board, piece, dx = 0, dy = 0, shape = piece.shape) { return shape.some((row, y) => row.some((cell, x) => cell && (piece.x + x + dx < 0 || piece.x + x + dx >= 10 || piece.y + y + dy >= 20 || (piece.y + y + dy >= 0 && board[piece.y + y + dy][piece.x + x + dx])))); }
-function rotateShape(shape) { return shape[0].map((_, index) => shape.map((row) => row[index]).reverse()); }
+function randomPiece() {
+  const type = Math.floor(Math.random() * TETROMINOES.length);
+  return {
+    shape: TETROMINOES[type].map(row => row.slice()),
+    color: TETRIS_COLORS[type],
+    x: 3,
+    y: 0
+  };
+}
+function emptyTetrisBoard() {
+  return Array.from({
+    length: 20
+  }, () => Array(10).fill(null));
+}
+function tetrisCollision(board, piece, dx = 0, dy = 0, shape = piece.shape) {
+  return shape.some((row, y) => row.some((cell, x) => cell && (piece.x + x + dx < 0 || piece.x + x + dx >= 10 || piece.y + y + dy >= 20 || piece.y + y + dy >= 0 && board[piece.y + y + dy][piece.x + x + dx])));
+}
+function rotateShape(shape) {
+  return shape[0].map((_, index) => shape.map(row => row[index]).reverse());
+}
 function lockTetris(session) {
-  const board = copyGrid(session.board); session.piece.shape.forEach((row, y) => row.forEach((cell, x) => { if (cell && session.piece.y + y >= 0 && session.piece.y + y < 20) board[session.piece.y + y][session.piece.x + x] = session.piece.color; }));
-  const remaining = board.filter((row) => row.some((cell) => !cell)); const cleared = 20 - remaining.length; while (remaining.length < 20) remaining.unshift(Array(10).fill(null));
-  const next = { ...session, board: remaining, lines: session.lines + cleared, score: session.score + cleared * 100 * Math.max(1, cleared), piece: randomPiece() };
-  if (next.lines >= next.targetLines) return { ...next, done: true, won: true, status: `Cleared ${next.lines} lines!` };
-  if (tetrisCollision(next.board, next.piece)) return { ...next, done: true, won: false, status: "The stack reached the top." };
+  const board = copyGrid(session.board);
+  session.piece.shape.forEach((row, y) => row.forEach((cell, x) => {
+    if (cell && session.piece.y + y >= 0 && session.piece.y + y < 20) board[session.piece.y + y][session.piece.x + x] = session.piece.color;
+  }));
+  const remaining = board.filter(row => row.some(cell => !cell));
+  const cleared = 20 - remaining.length;
+  while (remaining.length < 20) remaining.unshift(Array(10).fill(null));
+  const next = {
+    ...session,
+    board: remaining,
+    lines: session.lines + cleared,
+    score: session.score + cleared * 100 * Math.max(1, cleared),
+    piece: randomPiece()
+  };
+  if (next.lines >= next.targetLines) return {
+    ...next,
+    done: true,
+    won: true,
+    status: `Cleared ${next.lines} lines!`
+  };
+  if (tetrisCollision(next.board, next.piece)) return {
+    ...next,
+    done: true,
+    won: false,
+    status: "The stack reached the top."
+  };
   return next;
 }
 function moveTetris(session, key) {
   if (session.done) return session;
   const p = session.piece;
-  if (key === "ArrowLeft" || key === "a") return tetrisCollision(session.board, p, -1) ? session : { ...session, piece: { ...p, x: p.x - 1 } };
-  if (key === "ArrowRight" || key === "d") return tetrisCollision(session.board, p, 1) ? session : { ...session, piece: { ...p, x: p.x + 1 } };
-  if (key === "ArrowDown" || key === "s") return tetrisCollision(session.board, p, 0, 1) ? lockTetris(session) : { ...session, piece: { ...p, y: p.y + 1 }, score: session.score + 1 };
-  if (key === "ArrowUp" || key === "w") { const shape = rotateShape(p.shape); return tetrisCollision(session.board, p, 0, 0, shape) ? session : { ...session, piece: { ...p, shape } }; }
-  if (key === " ") { let drop = 0; while (!tetrisCollision(session.board, p, 0, drop + 1)) drop += 1; return lockTetris({ ...session, piece: { ...p, y: p.y + drop }, score: session.score + drop * 2 }); }
+  if (key === "ArrowLeft" || key === "a") return tetrisCollision(session.board, p, -1) ? session : {
+    ...session,
+    piece: {
+      ...p,
+      x: p.x - 1
+    }
+  };
+  if (key === "ArrowRight" || key === "d") return tetrisCollision(session.board, p, 1) ? session : {
+    ...session,
+    piece: {
+      ...p,
+      x: p.x + 1
+    }
+  };
+  if (key === "ArrowDown" || key === "s") return tetrisCollision(session.board, p, 0, 1) ? lockTetris(session) : {
+    ...session,
+    piece: {
+      ...p,
+      y: p.y + 1
+    },
+    score: session.score + 1
+  };
+  if (key === "ArrowUp" || key === "w") {
+    const shape = rotateShape(p.shape);
+    return tetrisCollision(session.board, p, 0, 0, shape) ? session : {
+      ...session,
+      piece: {
+        ...p,
+        shape
+      }
+    };
+  }
+  if (key === " ") {
+    let drop = 0;
+    while (!tetrisCollision(session.board, p, 0, drop + 1)) drop += 1;
+    return lockTetris({
+      ...session,
+      piece: {
+        ...p,
+        y: p.y + drop
+      },
+      score: session.score + drop * 2
+    });
+  }
   return session;
 }
-
 function createPacMaze(level) {
-  const rows = 15; const cols = 15; const grid = Array.from({ length: rows }, (_, y) => Array.from({ length: cols }, (_, x) => x === 0 || y === 0 || x === cols - 1 || y === rows - 1 ? 1 : (((x * 7 + y * 11 + level) % 17 === 0) && !(x < 4 && y < 4) && !(x > 10 && y > 10) ? 1 : 0)));
-  [[1,1],[1,2],[2,1],[2,2],[13,13],[12,13],[13,12],[12,12],[7,7]].forEach(([x,y]) => { grid[y][x] = 0; });
-  const pellets = new Set(); grid.forEach((row,y) => row.forEach((cell,x) => { if (!cell && !(x === 1 && y === 1)) pellets.add(`${x},${y}`); }));
-  return { grid, pellets, player: { x: 1, y: 1 }, ghosts: [{ x: 13, y: 13 }, { x: 13, y: 1 }, { x: 1, y: 13 }], lives: 3, ghostTick: 0 };
+  const rows = 15;
+  const cols = 15;
+  const grid = Array.from({
+    length: rows
+  }, (_, y) => Array.from({
+    length: cols
+  }, (_, x) => x === 0 || y === 0 || x === cols - 1 || y === rows - 1 ? 1 : (x * 7 + y * 11 + level) % 17 === 0 && !(x < 4 && y < 4) && !(x > 10 && y > 10) ? 1 : 0));
+  [[1, 1], [1, 2], [2, 1], [2, 2], [13, 13], [12, 13], [13, 12], [12, 12], [7, 7]].forEach(([x, y]) => {
+    grid[y][x] = 0;
+  });
+  // Keep all three ghost spawn zones connected to the player by a perimeter corridor.
+  for (let index = 1; index <= 13; index += 1) {
+    grid[1][index] = 0;
+    grid[13][index] = 0;
+    grid[index][1] = 0;
+    grid[index][13] = 0;
+  }
+  const pellets = new Set();
+  grid.forEach((row, y) => row.forEach((cell, x) => {
+    if (!cell && !(x === 1 && y === 1)) pellets.add(`${x},${y}`);
+  }));
+  return {
+    grid,
+    pellets,
+    player: {
+      x: 1,
+      y: 1
+    },
+    ghosts: [{
+      x: 13,
+      y: 13
+    }, {
+      x: 13,
+      y: 1
+    }, {
+      x: 1,
+      y: 13
+    }],
+    lives: 3,
+    ghostTick: 0
+  };
 }
 function createChessBoard() {
   const back = ["rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"];
-  return [back.map((type) => ({ type, color: "black" })), Array.from({ length: 8 }, () => ({ type: "pawn", color: "black" })), ...Array.from({ length: 4 }, () => Array(8).fill(null)), Array.from({ length: 8 }, () => ({ type: "pawn", color: "white" })), back.map((type) => ({ type, color: "white" }))];
+  return [back.map(type => ({
+    type,
+    color: "black"
+  })), Array.from({
+    length: 8
+  }, () => ({
+    type: "pawn",
+    color: "black"
+  })), ...Array.from({
+    length: 4
+  }, () => Array(8).fill(null)), Array.from({
+    length: 8
+  }, () => ({
+    type: "pawn",
+    color: "white"
+  })), back.map(type => ({
+    type,
+    color: "white"
+  }))];
 }
 function chessMoves(board, r, c) {
-  const piece = board[r]?.[c]; if (!piece) return [];
-  const moves = []; const add = (nr, nc) => { if (nr < 0 || nr > 7 || nc < 0 || nc > 7) return false; const target = board[nr][nc]; if (!target) { moves.push([nr,nc]); return true; } if (target.color !== piece.color) moves.push([nr,nc]); return false; };
-  const dirs = piece.type === "rook" ? [[1,0],[-1,0],[0,1],[0,-1]] : piece.type === "bishop" ? [[1,1],[1,-1],[-1,1],[-1,-1]] : piece.type === "queen" || piece.type === "king" ? [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]] : [];
-  if (piece.type === "pawn") { const d = piece.color === "white" ? -1 : 1; if (r + d >= 0 && r + d < 8 && !board[r + d][c]) { moves.push([r + d,c]); if ((piece.color === "white" && r === 6) || (piece.color === "black" && r === 1)) if (!board[r + d * 2][c]) moves.push([r + d * 2,c]); } for (const dc of [-1,1]) if (board[r + d]?.[c + dc] && board[r + d][c + dc].color !== piece.color) moves.push([r + d,c + dc]); }
-  else if (piece.type === "knight") { [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]].forEach(([dr,dc]) => add(r + dr,c + dc)); }
-  else { dirs.forEach(([dr,dc]) => { const max = piece.type === "king" ? 1 : 7; for (let step = 1; step <= max; step += 1) if (!add(r + dr * step,c + dc * step)) break; }); }
+  const piece = board[r]?.[c];
+  if (!piece) return [];
+  const moves = [];
+  const add = (nr, nc) => {
+    if (nr < 0 || nr > 7 || nc < 0 || nc > 7) return false;
+    const target = board[nr][nc];
+    if (!target) {
+      moves.push([nr, nc]);
+      return true;
+    }
+    if (target.color !== piece.color) moves.push([nr, nc]);
+    return false;
+  };
+  const dirs = piece.type === "rook" ? [[1, 0], [-1, 0], [0, 1], [0, -1]] : piece.type === "bishop" ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] : piece.type === "queen" || piece.type === "king" ? [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] : [];
+  if (piece.type === "pawn") {
+    const d = piece.color === "white" ? -1 : 1;
+    if (r + d >= 0 && r + d < 8 && !board[r + d][c]) {
+      moves.push([r + d, c]);
+      if (piece.color === "white" && r === 6 || piece.color === "black" && r === 1) if (!board[r + d * 2][c]) moves.push([r + d * 2, c]);
+    }
+    for (const dc of [-1, 1]) if (board[r + d]?.[c + dc] && board[r + d][c + dc].color !== piece.color) moves.push([r + d, c + dc]);
+  } else if (piece.type === "knight") {
+    [[2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [1, -2], [-1, 2], [-1, -2]].forEach(([dr, dc]) => add(r + dr, c + dc));
+  } else {
+    dirs.forEach(([dr, dc]) => {
+      const max = piece.type === "king" ? 1 : 7;
+      for (let step = 1; step <= max; step += 1) if (!add(r + dr * step, c + dc * step)) break;
+    });
+  }
   return moves;
 }
-const CHESS_SYMBOL = { white: { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" }, black: { king: "♚", queen: "♛", rook: "♜", bishop: "♝", knight: "♞", pawn: "♟" } };
-
+const CHESS_SYMBOL = {
+  white: {
+    king: "♔",
+    queen: "♕",
+    rook: "♖",
+    bishop: "♗",
+    knight: "♘",
+    pawn: "♙"
+  },
+  black: {
+    king: "♚",
+    queen: "♛",
+    rook: "♜",
+    bishop: "♝",
+    knight: "♞",
+    pawn: "♟"
+  }
+};
 function createSudoku(level) {
-  const shift = level % 9; const solution = Array.from({ length: 9 }, (_, r) => Array.from({ length: 9 }, (_, c) => ((r * 3 + Math.floor(r / 3) + c + shift) % 9) + 1));
-  const random = seeded(level * 733 + 19); const puzzle = copyGrid(solution); const blanks = Math.min(62, 30 + Math.floor(level * 0.3)); let removed = 0;
-  while (removed < blanks) { const r = Math.floor(random() * 9); const c = Math.floor(random() * 9); if (puzzle[r][c] !== 0) { puzzle[r][c] = 0; removed += 1; } }
-  return { solution, puzzle, values: copyGrid(puzzle), fixed: puzzle.map((row) => row.map((value) => value !== 0)), selected: [0,0] };
+  const shift = level % 9;
+  const solution = Array.from({
+    length: 9
+  }, (_, r) => Array.from({
+    length: 9
+  }, (_, c) => (r * 3 + Math.floor(r / 3) + c + shift) % 9 + 1));
+  const random = seeded(level * 733 + 19);
+  const puzzle = copyGrid(solution);
+  const cells = Array.from({
+    length: 81
+  }, (_, index) => [Math.floor(index / 9), index % 9]);
+  for (let i = cells.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+  const targetBlanks = Math.min(48, 30 + Math.floor(level * 0.18));
+  let removed = 0;
+  for (const [r, c] of cells) {
+    if (removed >= targetBlanks) break;
+    const previous = puzzle[r][c];
+    puzzle[r][c] = 0;
+    if (countSudokuSolutions(puzzle, 2) === 1) removed += 1;else puzzle[r][c] = previous;
+  }
+  return {
+    solution,
+    puzzle,
+    values: copyGrid(puzzle),
+    fixed: puzzle.map(row => row.map(value => value !== 0)),
+    selected: [0, 0]
+  };
 }
-function createTowerDefense(level) { return { towers: [], enemies: [], spawned: 0, waveSize: Math.min(30, 7 + Math.floor(level * 0.23)), baseHp: 10, tick: 0, coins: 100 + level * 4, nextEnemyId: 1 }; }
-function create2048(level) { const grid = Array.from({ length: 4 }, () => Array(4).fill(0)); add2048Tile(grid); add2048Tile(grid); return { grid, target: level > 90 ? 2048 : level > 70 ? 1024 : level > 45 ? 512 : level > 20 ? 256 : level > 8 ? 128 : 64, moves: 0 }; }
-function add2048Tile(grid) { const empty = []; grid.forEach((row,r) => row.forEach((v,c) => { if (!v) empty.push([r,c]); })); if (empty.length) { const [r,c] = empty[Math.floor(Math.random() * empty.length)]; grid[r][c] = Math.random() < .9 ? 2 : 4; } }
+function createTowerDefense(level) {
+  const rows = 8;
+  const cols = 10;
+  const walls = Array.from({
+    length: rows
+  }, (_, y) => Array.from({
+    length: cols
+  }, () => y === 0 || y === rows - 1 ? 1 : 0));
+  [2, 4, 6, 8].forEach((x, index) => {
+    const gateRow = 1 + (level * (index + 3) + index * 2) % (rows - 2);
+    for (let y = 1; y < rows - 1; y += 1) {
+      if (y !== gateRow) walls[y][x] = 1;
+    }
+  });
+  const routeResult = solveGridPath(walls, {
+    x: 0,
+    y: 3
+  }, {
+    x: 9,
+    y: 3
+  }, "BFS");
+  const route = routeResult.path.length ? routeResult.path : Array.from({
+    length: cols
+  }, (_, x) => ({
+    x,
+    y: 3
+  }));
+  return {
+    towers: [],
+    enemies: [],
+    spawned: 0,
+    waveSize: Math.min(30, 7 + Math.floor(level * 0.23)),
+    baseHp: 10,
+    tick: 0,
+    coins: 100 + level * 4,
+    nextEnemyId: 1,
+    walls,
+    route
+  };
+}
+function create2048(level) {
+  const grid = Array.from({
+    length: 4
+  }, () => Array(4).fill(0));
+  add2048Tile(grid);
+  add2048Tile(grid);
+  return {
+    grid,
+    target: level > 90 ? 2048 : level > 70 ? 1024 : level > 45 ? 512 : level > 20 ? 256 : level > 8 ? 128 : 64,
+    moves: 0
+  };
+}
+function add2048Tile(grid) {
+  const empty = [];
+  grid.forEach((row, r) => row.forEach((v, c) => {
+    if (!v) empty.push([r, c]);
+  }));
+  if (empty.length) {
+    const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+    grid[r][c] = Math.random() < .9 ? 2 : 4;
+  }
+}
 function slide2048(grid, direction) {
-  const next = copyGrid(grid); let gained = 0;
-  for (let i = 0; i < 4; i += 1) { let line = direction === "left" || direction === "right" ? next[i].slice() : next.map((row) => row[i]); if (direction === "right" || direction === "down") line.reverse(); line = line.filter(Boolean); const merged = []; for (let j = 0; j < line.length; j += 1) { if (line[j] === line[j + 1]) { merged.push(line[j] * 2); gained += line[j] * 2; j += 1; } else merged.push(line[j]); } while (merged.length < 4) merged.push(0); if (direction === "right" || direction === "down") merged.reverse(); if (direction === "left" || direction === "right") next[i] = merged; else for (let r = 0; r < 4; r += 1) next[r][i] = merged[r]; }
-  return { grid: next, gained };
+  const next = copyGrid(grid);
+  let gained = 0;
+  for (let i = 0; i < 4; i += 1) {
+    let line = direction === "left" || direction === "right" ? next[i].slice() : next.map(row => row[i]);
+    if (direction === "right" || direction === "down") line.reverse();
+    line = line.filter(Boolean);
+    const merged = [];
+    for (let j = 0; j < line.length; j += 1) {
+      if (line[j] === line[j + 1]) {
+        merged.push(line[j] * 2);
+        gained += line[j] * 2;
+        j += 1;
+      } else merged.push(line[j]);
+    }
+    while (merged.length < 4) merged.push(0);
+    if (direction === "right" || direction === "down") merged.reverse();
+    if (direction === "left" || direction === "right") next[i] = merged;else for (let r = 0; r < 4; r += 1) next[r][i] = merged[r];
+  }
+  return {
+    grid: next,
+    gained
+  };
 }
-
 const CUBE_FACE_NAMES = ["U", "R", "F", "D", "L", "B"];
 const CUBE_COLORS = ["#f7f7f2", "#e84b4b", "#41bf77", "#f4d44d", "#ff9c45", "#4286f4"];
-const CUBE_STRIPS = [
-  [[18,19,20],[9,10,11],[45,46,47],[36,37,38]], [[2,5,8],[20,23,26],[29,32,35],[53,50,47]],
-  [[6,7,8],[9,12,15],[27,28,29],[44,41,38]], [[24,25,26],[15,16,17],[51,52,53],[42,43,44]],
-  [[0,3,6],[18,21,24],[27,30,33],[45,48,51]], [[0,1,2],[11,14,17],[26,25,24],[36,39,42]],
-];
-function solvedCube() { return CUBE_FACE_NAMES.flatMap((_, face) => Array(9).fill(face)); }
+const CUBE_STRIPS = [[[18, 19, 20], [9, 10, 11], [45, 46, 47], [36, 37, 38]], [[2, 5, 8], [20, 23, 26], [29, 32, 35], [53, 50, 47]], [[6, 7, 8], [9, 12, 15], [27, 28, 29], [44, 41, 38]], [[24, 25, 26], [15, 16, 17], [51, 52, 53], [42, 43, 44]], [[0, 3, 6], [18, 21, 24], [27, 30, 33], [45, 48, 51]], [[0, 1, 2], [11, 14, 17], [26, 25, 24], [36, 39, 42]]];
+function solvedCube() {
+  return CUBE_FACE_NAMES.flatMap((_, face) => Array(9).fill(face));
+}
 function rotateCubeFace(stickers, face, direction = 1) {
-  const next = stickers.slice(); const offset = face * 9; const faceValues = stickers.slice(offset, offset + 9); const rotated = Array(9);
-  for (let r = 0; r < 3; r += 1) for (let c = 0; c < 3; c += 1) { const target = direction === 1 ? c * 3 + (2 - r) : (2 - c) * 3 + r; rotated[target] = faceValues[r * 3 + c]; }
-  rotated.forEach((value, i) => { next[offset + i] = value; });
-  const strips = CUBE_STRIPS[face]; const old = strips.map((indices) => indices.map((index) => stickers[index]));
-  for (let i = 0; i < 4; i += 1) { const source = (i + (direction === 1 ? 3 : 1)) % 4; strips[i].forEach((index, j) => { next[index] = old[source][j]; }); }
+  const next = stickers.slice();
+  const offset = face * 9;
+  const faceValues = stickers.slice(offset, offset + 9);
+  const rotated = Array(9);
+  for (let r = 0; r < 3; r += 1) for (let c = 0; c < 3; c += 1) {
+    const target = direction === 1 ? c * 3 + (2 - r) : (2 - c) * 3 + r;
+    rotated[target] = faceValues[r * 3 + c];
+  }
+  rotated.forEach((value, i) => {
+    next[offset + i] = value;
+  });
+  const strips = CUBE_STRIPS[face];
+  const old = strips.map(indices => indices.map(index => stickers[index]));
+  for (let i = 0; i < 4; i += 1) {
+    const source = (i + (direction === 1 ? 3 : 1)) % 4;
+    strips[i].forEach((index, j) => {
+      next[index] = old[source][j];
+    });
+  }
   return next;
 }
-function createCube(level) { let stickers = solvedCube(); const random = seeded(level * 91 + 3); const turns = Math.min(30, 3 + Math.floor(level * 0.45)); for (let i = 0; i < turns; i += 1) stickers = rotateCubeFace(stickers, Math.floor(random() * 6), random() > 0.5 ? 1 : -1); return { stickers, turns }; }
-function cubeSolved(stickers) { return CUBE_FACE_NAMES.every((_, face) => stickers.slice(face * 9, face * 9 + 9).every((value) => value === stickers[face * 9])); }
-
-function createPortal(level) {
-  const rows = 8; const cols = 12; const grid = Array.from({ length: rows }, (_, y) => Array.from({ length: cols }, (_, x) => x === 0 || y === 0 || x === cols - 1 || y === rows - 1 ? 1 : 0));
-  for (let y = 1; y < rows - 1; y += 1) if (y !== (2 + level % 3)) grid[y][4] = 1;
-  for (let y = 1; y < rows - 1; y += 1) if (y !== (5 - level % 2)) grid[y][7] = 1;
-  [[1,1],[2,1],[2,2],[3,2],[10,6],[9,6],[9,5],[8,5],[3,3],[8,4]].forEach(([x,y]) => { grid[y][x] = 0; });
-  return { grid, player: { x: 1, y: 1 }, goal: { x: 10, y: 6 }, portals: [{ x: 3, y: 3 }, { x: 8, y: 4 }], moves: 0 };
+function createCube(level) {
+  let stickers = solvedCube();
+  const random = seeded(level * 91 + 3);
+  const turns = Math.min(30, 3 + Math.floor(level * 0.45));
+  for (let i = 0; i < turns; i += 1) stickers = rotateCubeFace(stickers, Math.floor(random() * 6), random() > 0.5 ? 1 : -1);
+  return {
+    stickers,
+    turns
+  };
 }
-const WORDS = ["APPLE","BRAVE","CLOUD","DREAM","EAGER","FLAME","GRAPE","HOUSE","INDEX","JOKER","KNIFE","LEMON","MANGO","NERVE","OCEAN","PIXEL","QUEST","ROBOT","SHINE","TRACE","UNITY","VIVID","WATER","YOUTH","ZEBRA","ALERT","BRAIN","CHARM","DELTA","EARTH","FAITH","GIANT","HONEY","IMAGE","JUICE","KOALA","LIGHT","MUSIC","NORTH","OPERA","PEACE","QUICK","RIVER","STONE","TIGER","URBAN","VOICE","WHALE","YEARN","ZESTY"];
-function createWordle(level) { return { answer: WORDS[(level - 1) % WORDS.length], guesses: [], current: "", maxGuesses: 6 }; }
+function cubeSolved(stickers) {
+  return CUBE_FACE_NAMES.every((_, face) => stickers.slice(face * 9, face * 9 + 9).every(value => value === stickers[face * 9]));
+}
+function createPortal(level) {
+  const rows = 8;
+  const cols = 12;
+  const grid = Array.from({
+    length: rows
+  }, (_, y) => Array.from({
+    length: cols
+  }, (_, x) => x === 0 || y === 0 || x === cols - 1 || y === rows - 1 ? 1 : 0));
+  for (let y = 1; y < rows - 1; y += 1) if (y !== 2 + level % 3) grid[y][4] = 1;
+  for (let y = 1; y < rows - 1; y += 1) if (y !== 5 - level % 2) grid[y][7] = 1;
+  [[1, 1], [2, 1], [2, 2], [3, 2], [10, 6], [9, 6], [9, 5], [8, 5], [3, 3], [8, 4]].forEach(([x, y]) => {
+    grid[y][x] = 0;
+  });
+  return {
+    grid,
+    player: {
+      x: 1,
+      y: 1
+    },
+    goal: {
+      x: 10,
+      y: 6
+    },
+    portals: [{
+      x: 3,
+      y: 3
+    }, {
+      x: 8,
+      y: 4
+    }],
+    portalPath: [],
+    portalVisited: [],
+    moves: 0
+  };
+}
+const WORDS = ["APPLE", "BRAVE", "CLOUD", "DREAM", "EAGER", "FLAME", "GRAPE", "HOUSE", "INDEX", "JOKER", "KNIFE", "LEMON", "MANGO", "NERVE", "OCEAN", "PIXEL", "QUEST", "ROBOT", "SHINE", "TRACE", "UNITY", "VIVID", "WATER", "YOUTH", "ZEBRA", "ALERT", "BRAIN", "CHARM", "DELTA", "EARTH", "FAITH", "GIANT", "HONEY", "IMAGE", "JUICE", "KOALA", "LIGHT", "MUSIC", "NORTH", "OPERA", "PEACE", "QUICK", "RIVER", "STONE", "TIGER", "URBAN", "VOICE", "WHALE", "YEARN", "ZESTY"];
+function createWordle(level) {
+  return {
+    answer: WORDS[(level - 1) % WORDS.length],
+    guesses: [],
+    current: "",
+    maxGuesses: 6
+  };
+}
 function createMines(level) {
-  const size = 9; const count = Math.min(22, 10 + Math.floor(level / 8)); const random = seeded(level * 109 + 41); const mines = Array.from({ length: size }, () => Array(size).fill(false)); let placed = 0;
-  while (placed < count) { const r = Math.floor(random() * size); const c = Math.floor(random() * size); if (!mines[r][c]) { mines[r][c] = true; placed += 1; } }
-  const numbers = mines.map((row,r) => row.map((isMine,c) => isMine ? -1 : [-1,0,1].flatMap((dr) => [-1,0,1].map((dc) => [r + dr,c + dc])).filter(([nr,nc]) => nr >= 0 && nr < size && nc >= 0 && nc < size && mines[nr][nc]).length));
-  return { mines, numbers, revealed: Array.from({ length: size }, () => Array(size).fill(false)), flagged: Array.from({ length: size }, () => Array(size).fill(false)), mineCount: count, safeTotal: size * size - count };
+  const size = 9;
+  const count = Math.min(22, 10 + Math.floor(level / 8));
+  const random = seeded(level * 109 + 41);
+  const mines = Array.from({
+    length: size
+  }, () => Array(size).fill(false));
+  let placed = 0;
+  while (placed < count) {
+    const r = Math.floor(random() * size);
+    const c = Math.floor(random() * size);
+    if (!mines[r][c]) {
+      mines[r][c] = true;
+      placed += 1;
+    }
+  }
+  const numbers = mines.map((row, r) => row.map((isMine, c) => isMine ? -1 : [-1, 0, 1].flatMap(dr => [-1, 0, 1].map(dc => [r + dr, c + dc])).filter(([nr, nc]) => nr >= 0 && nr < size && nc >= 0 && nc < size && mines[nr][nc]).length));
+  return {
+    mines,
+    numbers,
+    revealed: Array.from({
+      length: size
+    }, () => Array(size).fill(false)),
+    flagged: Array.from({
+      length: size
+    }, () => Array(size).fill(false)),
+    mineCount: count,
+    safeTotal: size * size - count
+  };
 }
 function revealMineCell(session, r, c) {
   if (session.done || session.flagged[r][c] || session.revealed[r][c]) return session;
-  const revealed = copyGrid(session.revealed); const queue = [[r,c]];
-  while (queue.length) { const [rr,cc] = queue.shift(); if (rr < 0 || rr >= 9 || cc < 0 || cc >= 9 || revealed[rr][cc] || session.flagged[rr][cc]) continue; revealed[rr][cc] = true; if (session.numbers[rr][cc] === 0 && !session.mines[rr][cc]) for (let dr = -1; dr <= 1; dr += 1) for (let dc = -1; dc <= 1; dc += 1) if (dr || dc) queue.push([rr + dr,cc + dc]); }
-  const safeRevealed = revealed.flat().filter(Boolean).length; if (session.mines[r][c]) return { ...session, revealed, done: true, won: false, status: "Mine triggered — try another sweep." };
-  if (safeRevealed >= session.safeTotal) return { ...session, revealed, done: true, won: true, score: session.score + 500, status: "All safe cells revealed!" };
-  return { ...session, revealed, score: session.score + 1, status: "Safe cell revealed." };
+  const revealed = copyGrid(session.revealed);
+  const queue = [[r, c]];
+  const queued = new Set([`${r},${c}`]);
+  let head = 0;
+  while (head < queue.length) {
+    const [rr, cc] = queue[head++];
+    if (rr < 0 || rr >= 9 || cc < 0 || cc >= 9 || revealed[rr][cc] || session.flagged[rr][cc]) continue;
+    revealed[rr][cc] = true;
+    if (session.numbers[rr][cc] !== 0 || session.mines[rr][cc]) continue;
+    for (let dr = -1; dr <= 1; dr += 1) {
+      for (let dc = -1; dc <= 1; dc += 1) {
+        if (!dr && !dc) continue;
+        const nr = rr + dr;
+        const nc = cc + dc;
+        const nextKey = `${nr},${nc}`;
+        if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9 && !revealed[nr][nc] && !session.flagged[nr][nc] && !queued.has(nextKey)) {
+          queued.add(nextKey);
+          queue.push([nr, nc]);
+        }
+      }
+    }
+  }
+  const safeRevealed = revealed.flat().filter(Boolean).length;
+  if (session.mines[r][c]) return {
+    ...session,
+    revealed,
+    done: true,
+    won: false,
+    status: "Mine triggered — try another sweep."
+  };
+  if (safeRevealed >= session.safeTotal) return {
+    ...session,
+    revealed,
+    done: true,
+    won: true,
+    score: session.score + 500,
+    status: "All safe cells revealed!"
+  };
+  return {
+    ...session,
+    revealed,
+    score: session.score + 1,
+    status: "Safe cell revealed using BFS flood fill."
+  };
 }
-function createCandy(level) { return { grid: Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => Math.floor(Math.random() * 6))), selected: null, score: 0, matches: 0, turns: Math.max(14, 24 - Math.floor(level / 10)), target: 200 + level * 3 }; }
+function createCandy(level) {
+  return {
+    grid: Array.from({
+      length: 8
+    }, () => Array.from({
+      length: 8
+    }, () => Math.floor(Math.random() * 6))),
+    selected: null,
+    score: 0,
+    matches: 0,
+    turns: Math.max(14, 24 - Math.floor(level / 10)),
+    target: 200 + level * 3
+  };
+}
 function findCandyMatches(grid) {
   const hits = new Set();
-  for (let r = 0; r < 8; r += 1) for (let c = 0; c < 8; c += 1) { const value = grid[r][c]; let run = 1; while (c + run < 8 && grid[r][c + run] === value) run += 1; if (run >= 3) for (let i = 0; i < run; i += 1) hits.add(`${r},${c + i}`); run = 1; while (r + run < 8 && grid[r + run][c] === value) run += 1; if (run >= 3) for (let i = 0; i < run; i += 1) hits.add(`${r + i},${c}`); }
+  for (let r = 0; r < 8; r += 1) for (let c = 0; c < 8; c += 1) {
+    const value = grid[r][c];
+    let run = 1;
+    while (c + run < 8 && grid[r][c + run] === value) run += 1;
+    if (run >= 3) for (let i = 0; i < run; i += 1) hits.add(`${r},${c + i}`);
+    run = 1;
+    while (r + run < 8 && grid[r + run][c] === value) run += 1;
+    if (run >= 3) for (let i = 0; i < run; i += 1) hits.add(`${r + i},${c}`);
+  }
   return hits;
 }
-function createCity(level = 1) { const grid = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => "empty")); for (let c = 0; c < 8; c += 1) grid[4][c] = "road"; return { grid, selected: "house", money: 1000 + level * 45, population: 0, happiness: 50, targetPopulation: 8, buildings: 0 }; }
-function createDeck(level) { const suits = ["♠","♥","♦","♣"]; const deck = suits.flatMap((suit) => Array.from({ length: 13 }, (_, i) => ({ id: `${suit}${i + 1}`, suit, rank: i + 1, faceUp: false }))); const random = seeded(level * 211 + 7); for (let i = deck.length - 1; i > 0; i -= 1) { const j = Math.floor(random() * (i + 1)); [deck[i],deck[j]] = [deck[j],deck[i]]; } const tableau = []; let cursor = 0; for (let pile = 0; pile < 7; pile += 1) { const cards = deck.slice(cursor,cursor + pile + 1); cursor += pile + 1; cards.forEach((card,i) => { card.faceUp = i === cards.length - 1; }); tableau.push(cards); } return { stock: deck.slice(cursor).map((card) => ({ ...card, faceUp: false })), waste: [], tableau, foundations: [[],[],[],[]], selected: null }; }
+function createCity(level = 1) {
+  const grid = Array.from({
+    length: 8
+  }, () => Array.from({
+    length: 8
+  }, () => "empty"));
+  for (let c = 0; c < 8; c += 1) grid[4][c] = "road";
+  return {
+    grid,
+    selected: "house",
+    money: 1000 + level * 45,
+    population: 0,
+    happiness: 50,
+    targetPopulation: 8,
+    buildings: 0
+  };
+}
+function createDeck(level) {
+  const suits = ["♠", "♥", "♦", "♣"];
+  const deck = suits.flatMap(suit => Array.from({
+    length: 13
+  }, (_, i) => ({
+    id: `${suit}${i + 1}`,
+    suit,
+    rank: i + 1,
+    faceUp: false
+  })));
+  const random = seeded(level * 211 + 7);
+  for (let i = deck.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  const tableau = [];
+  let cursor = 0;
+  for (let pile = 0; pile < 7; pile += 1) {
+    const cards = deck.slice(cursor, cursor + pile + 1);
+    cursor += pile + 1;
+    cards.forEach((card, i) => {
+      card.faceUp = i === cards.length - 1;
+    });
+    tableau.push(cards);
+  }
+  return {
+    stock: deck.slice(cursor).map(card => ({
+      ...card,
+      faceUp: false
+    })),
+    waste: [],
+    tableau,
+    foundations: [[], [], [], []],
+    selected: null
+  };
+}
 function generateMaze(cols = 21, rows = 15, seed = 1) {
-  const grid = Array.from({ length: rows }, () => Array(cols).fill(1)); const random = seeded(seed * 131 + 11); const stack = [[1,1]]; grid[1][1] = 0;
-  while (stack.length) { const [x,y] = stack[stack.length - 1]; const options = [[x + 2,y],[x - 2,y],[x,y + 2],[x,y - 2]].filter(([nx,ny]) => nx > 0 && nx < cols - 1 && ny > 0 && ny < rows - 1 && grid[ny][nx] === 1); if (!options.length) { stack.pop(); continue; } const [nx,ny] = options[Math.floor(random() * options.length)]; grid[(y + ny) / 2][(x + nx) / 2] = 0; grid[ny][nx] = 0; stack.push([nx,ny]); }
-  grid[rows - 2][cols - 2] = 0; return grid;
+  const grid = Array.from({
+    length: rows
+  }, () => Array(cols).fill(1));
+  const random = seeded(seed * 131 + 11);
+  const stack = [[1, 1]];
+  grid[1][1] = 0;
+  while (stack.length) {
+    const [x, y] = stack[stack.length - 1];
+    const options = [[x + 2, y], [x - 2, y], [x, y + 2], [x, y - 2]].filter(([nx, ny]) => nx > 0 && nx < cols - 1 && ny > 0 && ny < rows - 1 && grid[ny][nx] === 1);
+    if (!options.length) {
+      stack.pop();
+      continue;
+    }
+    const [nx, ny] = options[Math.floor(random() * options.length)];
+    grid[(y + ny) / 2][(x + nx) / 2] = 0;
+    grid[ny][nx] = 0;
+    stack.push([nx, ny]);
+  }
+  // Braid a subset of dead-end walls to create alternate routes.
+  const shortcuts = [];
+  for (let y = 1; y < rows - 1; y += 1) {
+    for (let x = 1; x < cols - 1; x += 1) {
+      if (grid[y][x] !== 1) continue;
+      const horizontal = grid[y][x - 1] === 0 && grid[y][x + 1] === 0;
+      const vertical = grid[y - 1][x] === 0 && grid[y + 1][x] === 0;
+      if (horizontal || vertical) shortcuts.push([x, y]);
+    }
+  }
+  shortcuts.forEach(([x, y]) => {
+    if (random() < 0.24) grid[y][x] = 0;
+  });
+  grid[1][1] = 0;
+  grid[rows - 2][cols - 2] = 0;
+  return grid;
+}
+function mazeCellCost(x, y) {
+  // Visible terrain weights: BFS ignores them; Dijkstra and A* minimize them.
+  return 1 + (x * 7 + y * 11 + x * y * 3) % 4;
 }
 function solveMaze(grid, algorithm = "BFS") {
-  const start = [1,1]; const end = [grid[0].length - 2,grid.length - 2]; const key = ([x,y]) => `${x},${y}`; const queue = [start]; const seen = new Set([key(start)]); const parent = new Map(); const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-  while (queue.length) { const current = algorithm === "DFS" ? queue.pop() : queue.shift(); if (current[0] === end[0] && current[1] === end[1]) break; const neighbours = dirs.map(([dx,dy]) => [current[0] + dx,current[1] + dy]).filter(([x,y]) => y >= 0 && y < grid.length && x >= 0 && x < grid[0].length && !grid[y][x] && !seen.has(`${x},${y}`)); if (algorithm === "A*") neighbours.sort((a,b) => Math.abs(a[0] - end[0]) + Math.abs(a[1] - end[1]) - Math.abs(b[0] - end[0]) - Math.abs(b[1] - end[1])); neighbours.forEach((point) => { seen.add(key(point)); parent.set(key(point), current); queue.push(point); }); }
-  let current = end; const path = []; while (current) { path.unshift({ x: current[0], y: current[1] }); if (current[0] === start[0] && current[1] === start[1]) break; current = parent.get(key(current)); } return path.length && path[0].x === 1 && path[0].y === 1 ? path : [];
+  return solveGridPath(grid, {
+    x: 1,
+    y: 1
+  }, {
+    x: grid[0].length - 2,
+    y: grid.length - 2
+  }, algorithm, {
+    costAt: mazeCellCost,
+    minStepCost: 1
+  });
 }
-
 function createSession(gameId, level) {
-  const common = { gameId, level, score: 0, done: false, won: false, status: "Level ready — start playing.", moves: 0 };
+  const common = {
+    gameId,
+    level,
+    score: 0,
+    done: false,
+    won: false,
+    status: "Level ready — start playing.",
+    moves: 0
+  };
   switch (gameId) {
-    case "tetris": return { ...common, board: emptyTetrisBoard(), piece: randomPiece(), lines: 0, targetLines: Math.min(12, 3 + Math.floor(level / 12)) };
-    case "pac-man": return { ...common, ...createPacMaze(level) };
-    case "chess": return { ...common, board: createChessBoard(), selected: null, playerTurn: true };
-    case "blockcraft": { const random = seeded(level * 53 + 8); const grid = Array.from({ length: 8 }, () => Array.from({ length: 12 }, () => { const v = random(); return v < .13 ? "tree" : v < .22 ? "stone" : v < .27 ? "water" : "grass"; })); return { ...common, grid, selectedBuild: "house", wood: 0, stone: 0, built: 0, targetBuild: Math.min(15, 5 + Math.floor(level / 10)) }; }
-    case "snake": return { ...common, snake: [{x:8,y:7},{x:7,y:7},{x:6,y:7}], direction: "right", nextDirection: "right", food: {x:12,y:5}, targetFood: Math.min(14, 4 + Math.floor(level / 8)), eaten: 0, gridW: 18, gridH: 14, tick: 0 };
-    case "sudoku": return { ...common, ...createSudoku(level) };
-    case "tower-defense": return { ...common, ...createTowerDefense(level) };
-    case "2048": return { ...common, ...create2048(level) };
-    case "rubiks-cube": return { ...common, ...createCube(level) };
-    case "portal-puzzle": return { ...common, ...createPortal(level) };
-    case "wordle": return { ...common, ...createWordle(level) };
-    case "minesweeper": return { ...common, ...createMines(level) };
-    case "candy-match": return { ...common, ...createCandy(level) };
-    case "city-builder": return { ...common, ...createCity(level), targetPopulation: 8 + Math.floor(level / 5) };
-    case "solitaire": return { ...common, ...createDeck(level) };
-    case "maze-solver": return { ...common, grid: generateMaze(21,15,level), player: {x:1,y:1}, goal: {x:19,y:13}, path: [], algorithm: "BFS" };
-    default: return common;
+    case "tetris":
+      return {
+        ...common,
+        board: emptyTetrisBoard(),
+        piece: randomPiece(),
+        lines: 0,
+        targetLines: Math.min(12, 3 + Math.floor(level / 12))
+      };
+    case "pac-man":
+      return {
+        ...common,
+        ...createPacMaze(level)
+      };
+    case "chess":
+      return {
+        ...common,
+        board: createChessBoard(),
+        selected: null,
+        playerTurn: true
+      };
+    case "blockcraft":
+      {
+        const random = seeded(level * 53 + 8);
+        const grid = Array.from({
+          length: 8
+        }, () => Array.from({
+          length: 12
+        }, () => {
+          const v = random();
+          return v < .13 ? "tree" : v < .22 ? "stone" : v < .27 ? "water" : "grass";
+        }));
+        return {
+          ...common,
+          grid,
+          selectedBuild: "house",
+          wood: 0,
+          stone: 0,
+          built: 0,
+          targetBuild: Math.min(15, 5 + Math.floor(level / 10))
+        };
+      }
+    case "snake":
+      return {
+        ...common,
+        snake: [{
+          x: 8,
+          y: 7
+        }, {
+          x: 7,
+          y: 7
+        }, {
+          x: 6,
+          y: 7
+        }],
+        direction: "right",
+        nextDirection: "right",
+        food: {
+          x: 12,
+          y: 5
+        },
+        targetFood: Math.min(14, 4 + Math.floor(level / 8)),
+        eaten: 0,
+        gridW: 18,
+        gridH: 14,
+        tick: 0
+      };
+    case "sudoku":
+      return {
+        ...common,
+        ...createSudoku(level)
+      };
+    case "tower-defense":
+      return {
+        ...common,
+        ...createTowerDefense(level)
+      };
+    case "2048":
+      return {
+        ...common,
+        ...create2048(level)
+      };
+    case "rubiks-cube":
+      return {
+        ...common,
+        ...createCube(level)
+      };
+    case "portal-puzzle":
+      return {
+        ...common,
+        ...createPortal(level)
+      };
+    case "wordle":
+      return {
+        ...common,
+        ...createWordle(level)
+      };
+    case "minesweeper":
+      return {
+        ...common,
+        ...createMines(level)
+      };
+    case "candy-match":
+      return {
+        ...common,
+        ...createCandy(level)
+      };
+    case "city-builder":
+      return {
+        ...common,
+        ...createCity(level),
+        targetPopulation: 8 + Math.floor(level / 5)
+      };
+    case "solitaire":
+      return {
+        ...common,
+        ...createDeck(level)
+      };
+    case "maze-solver":
+      return {
+        ...common,
+        grid: generateMaze(21, 15, level),
+        player: {
+          x: 1,
+          y: 1
+        },
+        goal: {
+          x: 19,
+          y: 13
+        },
+        path: [],
+        visited: [],
+        pathCost: 0,
+        explored: 0,
+        algorithm: "BFS"
+      };
+    default:
+      return common;
   }
 }
-
 function movePacman(session, dx, dy) {
-  const nx = session.player.x + dx; const ny = session.player.y + dy; if (session.grid[ny]?.[nx] !== 0 || session.done) return session;
-  const pellets = new Set(session.pellets); pellets.delete(`${nx},${ny}`); const next = { ...session, player: { x:nx,y:ny }, pellets, moves: session.moves + 1, score: session.score + (session.pellets.has(`${nx},${ny}`) ? 10 : 0) };
-  if (!pellets.size) return { ...next, done: true, won: true, score: next.score + 300, status: "Maze cleared!" };
-  if (session.ghosts.some((ghost) => ghost.x === nx && ghost.y === ny)) return pacmanHit(next);
-  return { ...next, status: `${pellets.size} pellets left.` };
+  const nx = session.player.x + dx;
+  const ny = session.player.y + dy;
+  if (session.grid[ny]?.[nx] !== 0 || session.done) return session;
+  const pellets = new Set(session.pellets);
+  pellets.delete(`${nx},${ny}`);
+  const next = {
+    ...session,
+    player: {
+      x: nx,
+      y: ny
+    },
+    pellets,
+    moves: session.moves + 1,
+    score: session.score + (session.pellets.has(`${nx},${ny}`) ? 10 : 0)
+  };
+  if (!pellets.size) return {
+    ...next,
+    done: true,
+    won: true,
+    score: next.score + 300,
+    status: "Maze cleared!"
+  };
+  if (session.ghosts.some(ghost => ghost.x === nx && ghost.y === ny)) return pacmanHit(next);
+  return {
+    ...next,
+    status: `${pellets.size} pellets left.`
+  };
 }
-function pacmanHit(session) { const lives = session.lives - 1; if (lives <= 0) return { ...session, lives: 0, done: true, won: false, status: "The sentinels caught you." }; return { ...session, lives, player: {x:1,y:1}, status: `Caught! ${lives} lives remain.` }; }
+function pacmanHit(session) {
+  const lives = session.lives - 1;
+  if (lives <= 0) return {
+    ...session,
+    lives: 0,
+    done: true,
+    won: false,
+    status: "The sentinels caught you."
+  };
+  return {
+    ...session,
+    lives,
+    player: {
+      x: 1,
+      y: 1
+    },
+    status: `Caught! ${lives} lives remain.`
+  };
+}
 function tickPacman(session) {
-  if (session.done) return session; const ghostTick = session.ghostTick + 1; if (ghostTick % 2 !== 0) return { ...session, ghostTick };
-  const ghosts = session.ghosts.map((ghost) => { const options = [[ghost.x+1,ghost.y],[ghost.x-1,ghost.y],[ghost.x,ghost.y+1],[ghost.x,ghost.y-1]].filter(([x,y]) => session.grid[y]?.[x] === 0); options.sort((a,b) => (Math.abs(a[0] - session.player.x) + Math.abs(a[1] - session.player.y)) - (Math.abs(b[0] - session.player.x) + Math.abs(b[1] - session.player.y))); const choice = Math.random() < 0.68 ? options[0] : options[Math.floor(Math.random() * options.length)]; return choice ? {x:choice[0],y:choice[1]} : ghost; }); const next = { ...session, ghosts, ghostTick };
-  return ghosts.some((ghost) => samePos(ghost, next.player)) ? pacmanHit(next) : next;
+  if (session.done) return session;
+  const ghostTick = session.ghostTick + 1;
+  if (ghostTick % 2 !== 0) return {
+    ...session,
+    ghostTick
+  };
+  const ghosts = session.ghosts.map(ghost => {
+    const route = solveGridPath(session.grid, ghost, session.player, "BFS");
+    const next = route.path[1];
+    return next || ghost;
+  });
+  const next = {
+    ...session,
+    ghosts,
+    ghostTick
+  };
+  return ghosts.some(ghost => samePos(ghost, next.player)) ? pacmanHit(next) : next;
 }
 function moveSnake(session) {
-  if (session.done) return session; const direction = session.nextDirection || session.direction; const delta = {up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[direction]; const head = { x:session.snake[0].x + delta[0], y:session.snake[0].y + delta[1] }; const eating = samePos(head,session.food); const body = eating ? session.snake : session.snake.slice(0,-1);
-  if (head.x < 0 || head.x >= session.gridW || head.y < 0 || head.y >= session.gridH || body.some((part) => samePos(part,head))) return { ...session, done:true, won:false, status:"Snake collided — retry the run." };
-  const snake = [head,...(eating ? session.snake : session.snake.slice(0,-1))]; let food = session.food; let eaten = session.eaten; let score = session.score;
-  if (eating) { eaten += 1; score += 100; const open = []; for (let y=0;y<session.gridH;y+=1) for (let x=0;x<session.gridW;x+=1) if (!snake.some((part)=>part.x===x&&part.y===y)) open.push({x,y}); food = open[Math.floor(Math.random()*open.length)] || food; }
-  if (eaten >= session.targetFood) return { ...session, snake, food, eaten, score:score+250, done:true, won:true, direction, nextDirection:direction, status:"Fruit quota complete!" };
-  return { ...session, snake, food, eaten, score, direction, nextDirection:direction, status:`Fruit ${eaten}/${session.targetFood}` };
+  if (session.done) return session;
+  const direction = session.nextDirection || session.direction;
+  const delta = {
+    up: [0, -1],
+    down: [0, 1],
+    left: [-1, 0],
+    right: [1, 0]
+  }[direction];
+  const head = {
+    x: session.snake[0].x + delta[0],
+    y: session.snake[0].y + delta[1]
+  };
+  const eating = samePos(head, session.food);
+  const body = eating ? session.snake : session.snake.slice(0, -1);
+  if (head.x < 0 || head.x >= session.gridW || head.y < 0 || head.y >= session.gridH || body.some(part => samePos(part, head))) return {
+    ...session,
+    done: true,
+    won: false,
+    status: "Snake collided — retry the run."
+  };
+  const snake = [head, ...(eating ? session.snake : session.snake.slice(0, -1))];
+  let food = session.food;
+  let eaten = session.eaten;
+  let score = session.score;
+  if (eating) {
+    eaten += 1;
+    score += 100;
+    const open = [];
+    for (let y = 0; y < session.gridH; y += 1) for (let x = 0; x < session.gridW; x += 1) if (!snake.some(part => part.x === x && part.y === y)) open.push({
+      x,
+      y
+    });
+    food = open[Math.floor(Math.random() * open.length)] || food;
+  }
+  if (eaten >= session.targetFood) return {
+    ...session,
+    snake,
+    food,
+    eaten,
+    score: score + 250,
+    done: true,
+    won: true,
+    direction,
+    nextDirection: direction,
+    status: "Fruit quota complete!"
+  };
+  return {
+    ...session,
+    snake,
+    food,
+    eaten,
+    score,
+    direction,
+    nextDirection: direction,
+    status: `Fruit ${eaten}/${session.targetFood}`
+  };
+}
+function towerPositionAt(route, progress) {
+  const index = Math.min(Math.floor(progress), route.length - 1);
+  const nextIndex = Math.min(index + 1, route.length - 1);
+  const fraction = progress - index;
+  const current = route[index];
+  const next = route[nextIndex];
+  return {
+    x: current.x + (next.x - current.x) * fraction,
+    y: current.y + (next.y - current.y) * fraction
+  };
 }
 function tickTower(session) {
-  if (session.done) return session; let tick = session.tick + 1; let spawned = session.spawned; let nextEnemyId = session.nextEnemyId; let enemies = session.enemies.map((enemy) => ({...enemy})); let towers = session.towers.map((tower) => ({...tower})); let baseHp = session.baseHp; let score = session.score; let coins = session.coins;
-  if (tick % 5 === 0 && spawned < session.waveSize) { enemies.push({ id:nextEnemyId++, x:0, y:3, hp:1+Math.floor(session.level/18), progress:0 }); spawned += 1; }
-  enemies.forEach((enemy) => { enemy.progress += 0.22; enemy.x = enemy.progress; });
-  towers.forEach((tower) => { tower.cooldown = Math.max(0,tower.cooldown-1); if (!tower.cooldown) { const target = enemies.filter((enemy) => enemy.hp > 0 && Math.hypot(enemy.x-tower.x,enemy.y-tower.y) <= 2.5).sort((a,b)=>b.progress-a.progress)[0]; if (target) { target.hp -= 1; tower.cooldown = 4; if (target.hp <= 0) { score += 50; coins += 18; } } } });
-  const remaining = []; enemies.forEach((enemy) => { if (enemy.hp <= 0) return; if (enemy.x >= 9.7) baseHp -= 1; else remaining.push(enemy); });
-  if (baseHp <= 0) return { ...session, tick, spawned, nextEnemyId, enemies:remaining, towers, baseHp:0, score, coins, done:true, won:false, status:"Base integrity depleted." };
-  if (spawned >= session.waveSize && remaining.length === 0) return { ...session, tick, spawned, nextEnemyId, enemies:remaining, towers, baseHp, score:score+300, coins, done:true, won:true, status:"Wave cleared — base secured!" };
-  return { ...session, tick, spawned, nextEnemyId, enemies:remaining, towers, baseHp, score, coins, status:`Wave ${spawned}/${session.waveSize} · base ${baseHp} HP` };
+  if (session.done) return session;
+  const tick = session.tick + 1;
+  let spawned = session.spawned;
+  let nextEnemyId = session.nextEnemyId;
+  let enemies = session.enemies.map(enemy => ({
+    ...enemy
+  }));
+  const towers = session.towers.map(tower => ({
+    ...tower
+  }));
+  let baseHp = session.baseHp;
+  let score = session.score;
+  let coins = session.coins;
+  if (tick % 5 === 0 && spawned < session.waveSize) {
+    const start = session.route[0];
+    enemies.push({
+      id: nextEnemyId++,
+      ...start,
+      hp: 1 + Math.floor(session.level / 18),
+      progress: 0
+    });
+    spawned += 1;
+  }
+  enemies = enemies.map(enemy => {
+    const progress = Math.min(session.route.length - 1, enemy.progress + 0.12);
+    return {
+      ...enemy,
+      ...towerPositionAt(session.route, progress),
+      progress
+    };
+  });
+  towers.forEach(tower => {
+    tower.cooldown = Math.max(0, tower.cooldown - 1);
+    if (tower.cooldown > 0) return;
+    const targets = new MinPriorityQueue();
+    enemies.forEach(enemy => {
+      if (enemy.hp <= 0) return;
+      const distance = Math.hypot(enemy.x - tower.x, enemy.y - tower.y);
+      if (distance <= 2.5) {
+        // Lower priority number = farther along the route, then closer to this turret.
+        targets.push(enemy, -(enemy.progress * 100 - distance * 10));
+      }
+    });
+    const target = targets.pop()?.value;
+    if (target) {
+      target.hp -= 1;
+      tower.cooldown = 4;
+      if (target.hp <= 0) {
+        score += 50;
+        coins += 18;
+      }
+    }
+  });
+  const remaining = [];
+  enemies.forEach(enemy => {
+    if (enemy.hp <= 0) return;
+    if (enemy.progress >= session.route.length - 1) baseHp -= 1;else remaining.push(enemy);
+  });
+  if (baseHp <= 0) return {
+    ...session,
+    tick,
+    spawned,
+    nextEnemyId,
+    enemies: remaining,
+    towers,
+    baseHp: 0,
+    score,
+    coins,
+    done: true,
+    won: false,
+    status: "Base integrity depleted."
+  };
+  if (spawned >= session.waveSize && remaining.length === 0) return {
+    ...session,
+    tick,
+    spawned,
+    nextEnemyId,
+    enemies: remaining,
+    towers,
+    baseHp,
+    score: score + 300,
+    coins,
+    done: true,
+    won: true,
+    status: "Wave cleared — base secured!"
+  };
+  return {
+    ...session,
+    tick,
+    spawned,
+    nextEnemyId,
+    enemies: remaining,
+    towers,
+    baseHp,
+    score,
+    coins,
+    status: `Wave ${spawned}/${session.waveSize} · base ${baseHp} HP`
+  };
 }
 function revealSudoku(session, value) {
-  if (session.done) return session; const [r,c] = session.selected; if (session.fixed[r][c]) return session; const values = copyGrid(session.values); values[r][c] = value;
-  const complete = values.every((row,rr) => row.every((v,cc) => v === session.solution[rr][cc])); return { ...session, values, moves:session.moves+1, score:session.score+(complete?500:0), done:complete, won:complete, status:complete ? "Sudoku solved perfectly!" : "Number placed. Keep going." };
+  if (session.done) return session;
+  const [r, c] = session.selected;
+  if (session.fixed[r][c]) return session;
+  const values = copyGrid(session.values);
+  if (value !== 0) {
+    const rowConflict = values[r].some((current, column) => column !== c && current === value);
+    const columnConflict = values.some((line, row) => row !== r && line[c] === value);
+    const boxRow = Math.floor(r / 3) * 3;
+    const boxCol = Math.floor(c / 3) * 3;
+    let boxConflict = false;
+    for (let rr = boxRow; rr < boxRow + 3; rr += 1) {
+      for (let cc = boxCol; cc < boxCol + 3; cc += 1) {
+        if ((rr !== r || cc !== c) && values[rr][cc] === value) boxConflict = true;
+      }
+    }
+    if (rowConflict || columnConflict || boxConflict) {
+      return {
+        ...session,
+        status: "Invalid move: duplicate in this row, column or 3×3 box."
+      };
+    }
+  }
+  values[r][c] = value;
+  const complete = values.every((row, rr) => row.every((v, cc) => v === session.solution[rr][cc]));
+  return {
+    ...session,
+    values,
+    moves: session.moves + 1,
+    score: session.score + (complete ? 500 : 0),
+    done: complete,
+    won: complete,
+    status: complete ? "Sudoku solved correctly!" : value === 0 ? "Cell cleared." : "Valid number placed. Keep going."
+  };
 }
 function move2048(session, direction) {
-  if (session.done) return session; const moved = slide2048(session.grid,direction); if (JSON.stringify(moved.grid) === JSON.stringify(session.grid)) return session; add2048Tile(moved.grid); const max = Math.max(...moved.grid.flat()); const score = session.score + moved.gained; if (max >= session.target) return { ...session, grid:moved.grid, score:score+250, moves:session.moves+1, done:true, won:true, status:`Target tile ${session.target} created!` };
-  const hasMove = moved.grid.some((row,r)=>row.some((v,c)=>!v || moved.grid[r+1]?.[c]===v || moved.grid[r]?.[c+1]===v)); if (!hasMove) return { ...session, grid:moved.grid, score, moves:session.moves+1, done:true, won:false, status:"No more moves available." };
-  return { ...session, grid:moved.grid, score, moves:session.moves+1, status:`Target tile: ${session.target}` };
+  if (session.done) return session;
+  const moved = slide2048(session.grid, direction);
+  if (JSON.stringify(moved.grid) === JSON.stringify(session.grid)) return session;
+  add2048Tile(moved.grid);
+  const max = Math.max(...moved.grid.flat());
+  const score = session.score + moved.gained;
+  if (max >= session.target) return {
+    ...session,
+    grid: moved.grid,
+    score: score + 250,
+    moves: session.moves + 1,
+    done: true,
+    won: true,
+    status: `Target tile ${session.target} created!`
+  };
+  const hasMove = moved.grid.some((row, r) => row.some((v, c) => !v || moved.grid[r + 1]?.[c] === v || moved.grid[r]?.[c + 1] === v));
+  if (!hasMove) return {
+    ...session,
+    grid: moved.grid,
+    score,
+    moves: session.moves + 1,
+    done: true,
+    won: false,
+    status: "No more moves available."
+  };
+  return {
+    ...session,
+    grid: moved.grid,
+    score,
+    moves: session.moves + 1,
+    status: `Target tile: ${session.target}`
+  };
 }
 function movePortal(session, dx, dy) {
-  if (session.done) return session; const nx = session.player.x + dx; const ny = session.player.y + dy; if (session.grid[ny]?.[nx] !== 0) return session; let player = {x:nx,y:ny}; const portal = session.portals.find((point)=>samePos(point,player)); if (portal) { const other = session.portals.find((point)=>point!==portal); player = {...other}; }
-  const win = samePos(player,session.goal); return { ...session, player, moves:session.moves+1, score:session.score+1+(portal?20:0), done:win, won:win, status:win?"Exit reached through the portal network!":"Keep moving toward the exit." };
+  if (session.done) return session;
+  const nx = session.player.x + dx;
+  const ny = session.player.y + dy;
+  if (session.grid[ny]?.[nx] !== 0) return session;
+  let player = {
+    x: nx,
+    y: ny
+  };
+  const portal = session.portals.find(point => samePos(point, player));
+  if (portal) {
+    const other = session.portals.find(point => point !== portal);
+    player = {
+      ...other
+    };
+  }
+  const win = samePos(player, session.goal);
+  return {
+    ...session,
+    player,
+    portalPath: [],
+    portalVisited: [],
+    moves: session.moves + 1,
+    score: session.score + 1 + (portal ? 20 : 0),
+    done: win,
+    won: win,
+    status: win ? "Exit reached through the portal network!" : "Keep moving toward the exit."
+  };
 }
 function moveMaze(session, dx, dy) {
-  if (session.done) return session; const nx=session.player.x+dx; const ny=session.player.y+dy; if (session.grid[ny]?.[nx] !== 0) return session; const player={x:nx,y:ny}; const win=samePos(player,session.goal); return { ...session, player, moves:session.moves+1, score:session.score+1, done:win, won:win, status:win?`${session.algorithm} route completed!`:"Find the exit or visualise a route." };
+  if (session.done) return session;
+  const nx = session.player.x + dx;
+  const ny = session.player.y + dy;
+  if (session.grid[ny]?.[nx] !== 0) return session;
+  const player = {
+    x: nx,
+    y: ny
+  };
+  const win = samePos(player, session.goal);
+  return {
+    ...session,
+    player,
+    moves: session.moves + 1,
+    score: session.score + 1,
+    done: win,
+    won: win,
+    status: win ? `${session.algorithm} route completed!` : "Find the exit or visualise a route."
+  };
 }
-function getCardColor(card) { return card && (card.suit === "♥" || card.suit === "♦") ? "red" : "black"; }
-function solitaireCardAt(session, source) { if (source.type === "waste") return session.waste[session.waste.length - 1]; if (source.type === "tableau") return session.tableau[source.pile][source.index]; return null; }
+function getCardColor(card) {
+  return card && (card.suit === "♥" || card.suit === "♦") ? "red" : "black";
+}
+function solitaireCardAt(session, source) {
+  if (source.type === "waste") return session.waste[session.waste.length - 1];
+  if (source.type === "tableau") return session.tableau[source.pile][source.index];
+  return null;
+}
 function clickSolitaire(session, source) {
   if (session.done) return session;
-  if (source.type === "stock") { if (session.stock.length) { const stock=session.stock.slice(); const waste=session.waste.slice(); const card=stock.pop(); waste.push({...card,faceUp:true}); return {...session,stock,waste,selected:{type:"waste"}}; } if (session.waste.length) return {...session,stock:session.waste.slice().reverse().map((card)=>({...card,faceUp:false})),waste:[],selected:null}; return session; }
+  if (source.type === "stock") {
+    if (session.stock.length) {
+      const stock = session.stock.slice();
+      const waste = session.waste.slice();
+      const card = stock.pop();
+      waste.push({
+        ...card,
+        faceUp: true
+      });
+      return {
+        ...session,
+        stock,
+        waste,
+        selected: {
+          type: "waste"
+        }
+      };
+    }
+    if (session.waste.length) return {
+      ...session,
+      stock: session.waste.slice().reverse().map(card => ({
+        ...card,
+        faceUp: false
+      })),
+      waste: [],
+      selected: null
+    };
+    return session;
+  }
   if (source.type === "foundation") return session;
   if (session.selected) {
-    const moving = solitaireCardAt(session,session.selected); const targetPile = source.type === "tableau" ? session.tableau[source.pile] : null; const target = targetPile?.[targetPile.length-1]; const sourceIsWaste=session.selected.type === "waste"; const movingStack=session.selected.type === "tableau"?session.tableau[session.selected.pile].slice(session.selected.index):moving?[moving]:[];
-    if (source.type === "tableau" && moving && (target ? moving.rank === target.rank-1 && getCardColor(moving)!==getCardColor(target) : moving.rank===13) && !(session.selected.type === "tableau" && session.selected.pile === source.pile)) {
-      const tableau=session.tableau.map((pile)=>pile.slice()); if (session.selected.type === "tableau") { tableau[session.selected.pile]=tableau[session.selected.pile].slice(0,session.selected.index); const top=tableau[session.selected.pile].length-1; if(top>=0) tableau[session.selected.pile][top]={...tableau[session.selected.pile][top],faceUp:true}; } const stack=movingStack.map((card)=>({...card,faceUp:true})); tableau[source.pile]=[...tableau[source.pile],...stack]; return {...session,tableau,waste:sourceIsWaste?session.waste.slice(0,-1):session.waste,selected:null,moves:session.moves+1,status:"Card stack moved."};
+    const moving = solitaireCardAt(session, session.selected);
+    const targetPile = source.type === "tableau" ? session.tableau[source.pile] : null;
+    const target = targetPile?.[targetPile.length - 1];
+    const sourceIsWaste = session.selected.type === "waste";
+    const movingStack = session.selected.type === "tableau" ? session.tableau[session.selected.pile].slice(session.selected.index) : moving ? [moving] : [];
+    if (source.type === "tableau" && moving && (target ? moving.rank === target.rank - 1 && getCardColor(moving) !== getCardColor(target) : moving.rank === 13) && !(session.selected.type === "tableau" && session.selected.pile === source.pile)) {
+      const tableau = session.tableau.map(pile => pile.slice());
+      if (session.selected.type === "tableau") {
+        tableau[session.selected.pile] = tableau[session.selected.pile].slice(0, session.selected.index);
+        const top = tableau[session.selected.pile].length - 1;
+        if (top >= 0) tableau[session.selected.pile][top] = {
+          ...tableau[session.selected.pile][top],
+          faceUp: true
+        };
+      }
+      const stack = movingStack.map(card => ({
+        ...card,
+        faceUp: true
+      }));
+      tableau[source.pile] = [...tableau[source.pile], ...stack];
+      return {
+        ...session,
+        tableau,
+        waste: sourceIsWaste ? session.waste.slice(0, -1) : session.waste,
+        selected: null,
+        moves: session.moves + 1,
+        status: "Card stack moved."
+      };
     }
-    if (source.type === "foundation" && moving && moving.rank === session.foundations[source.pile].length+1 && (session.foundations[source.pile].length===0 || session.foundations[source.pile][session.foundations[source.pile].length-1].suit===moving.suit) && (sourceIsWaste || movingStack.length===1)) {
-      const foundations=session.foundations.map((pile)=>pile.slice()); foundations[source.pile].push({...moving,faceUp:true}); let waste=session.waste; let tableau=session.tableau;
-      if(sourceIsWaste) waste=waste.slice(0,-1); else { tableau=tableau.map((pile)=>pile.slice()); tableau[session.selected.pile].splice(session.selected.index,1); const top=tableau[session.selected.pile].length-1; if(top>=0)tableau[session.selected.pile][top]={...tableau[session.selected.pile][top],faceUp:true}; }
-      const won=foundations.reduce((sum,pile)=>sum+pile.length,0)===52; return {...session,foundations,waste,tableau,selected:null,moves:session.moves+1,done:won,won,score:session.score+(won?1000:10),status:won?"All 52 cards are home!":"Card moved to foundation."};
+    if (source.type === "foundation" && moving && moving.rank === session.foundations[source.pile].length + 1 && (session.foundations[source.pile].length === 0 || session.foundations[source.pile][session.foundations[source.pile].length - 1].suit === moving.suit) && (sourceIsWaste || movingStack.length === 1)) {
+      const foundations = session.foundations.map(pile => pile.slice());
+      foundations[source.pile].push({
+        ...moving,
+        faceUp: true
+      });
+      let waste = session.waste;
+      let tableau = session.tableau;
+      if (sourceIsWaste) waste = waste.slice(0, -1);else {
+        tableau = tableau.map(pile => pile.slice());
+        tableau[session.selected.pile].splice(session.selected.index, 1);
+        const top = tableau[session.selected.pile].length - 1;
+        if (top >= 0) tableau[session.selected.pile][top] = {
+          ...tableau[session.selected.pile][top],
+          faceUp: true
+        };
+      }
+      const won = foundations.reduce((sum, pile) => sum + pile.length, 0) === 52;
+      return {
+        ...session,
+        foundations,
+        waste,
+        tableau,
+        selected: null,
+        moves: session.moves + 1,
+        done: won,
+        won,
+        score: session.score + (won ? 1000 : 10),
+        status: won ? "All 52 cards are home!" : "Card moved to foundation."
+      };
     }
-    if (source.type === "waste" && session.selected.type === "waste") return {...session,selected:null};
+    if (source.type === "waste" && session.selected.type === "waste") return {
+      ...session,
+      selected: null
+    };
   }
-  if (source.type === "waste" && session.waste.length) return {...session,selected:{type:"waste"}};
-  if (source.type === "tableau") { const card=session.tableau[source.pile]?.[source.index]; if(card?.faceUp) return {...session,selected:{type:"tableau",pile:source.pile,index:source.index}}; }
+  if (source.type === "waste" && session.waste.length) return {
+    ...session,
+    selected: {
+      type: "waste"
+    }
+  };
+  if (source.type === "tableau") {
+    const card = session.tableau[source.pile]?.[source.index];
+    if (card?.faceUp) return {
+      ...session,
+      selected: {
+        type: "tableau",
+        pile: source.pile,
+        index: source.index
+      }
+    };
+  }
   return session;
 }
-
-function GameSurface({ game, level, onWin }) {
-  const [session,setSession]=useState(()=>createSession(game.id,level)); const sessionRef=useRef(session); const onWinRef=useRef(onWin); const reportedRef=useRef(false);
-  useEffect(()=>{sessionRef.current=session;},[session]); useEffect(()=>{onWinRef.current=onWin;},[onWin]);
-  useEffect(()=>{ if(session.done && session.won && !reportedRef.current){reportedRef.current=true;onWinRef.current?.(session.score);} },[session.done,session.won,session.score]);
-  useEffect(()=>{
-    const handleKey=(event)=>{
-      const key=event.key; const low=key.toLowerCase(); const id=game.id; const state=sessionRef.current;
-      if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(key) && ["tetris","snake","pac-man","2048","portal-puzzle","maze-solver"].includes(id)) event.preventDefault();
-      if(id==="tetris" && (["ArrowLeft","ArrowRight","ArrowDown","ArrowUp"," ","a","d","s","w"].includes(key)||["a","d","s","w"].includes(low))) setSession((prev)=>moveTetris(prev,["a","d","s","w"].includes(low)?low:key));
-      if(id==="snake"){const dir={ArrowUp:"up",w:"up",ArrowDown:"down",s:"down",ArrowLeft:"left",a:"left",ArrowRight:"right",d:"right"}[key]||({w:"up",s:"down",a:"left",d:"right"}[low]); if(dir){const reverse={up:"down",down:"up",left:"right",right:"left"}; if(reverse[state.direction]!==dir)setSession((prev)=>({...prev,nextDirection:dir}));}}
-      if(id==="pac-man"){const delta={ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1],ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0]}[key]||({w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]}[low]); if(delta)setSession((prev)=>movePacman(prev,delta[0],delta[1]));}
-      if(id==="2048"){const dir={ArrowUp:"up",w:"up",ArrowDown:"down",s:"down",ArrowLeft:"left",a:"left",ArrowRight:"right",d:"right"}[key]||({w:"up",s:"down",a:"left",d:"right"}[low]);if(dir)setSession((prev)=>move2048(prev,dir));}
-      if(id==="portal-puzzle"||id==="maze-solver"){const delta={ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1],ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0]}[key]||({w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]}[low]);if(delta)setSession((prev)=>id==="portal-puzzle"?movePortal(prev,delta[0],delta[1]):moveMaze(prev,delta[0],delta[1]));}
+function applyChessMove(board, move) {
+  const next = board.map(row => row.slice());
+  const [fromRow, fromCol] = move.from;
+  const [toRow, toCol] = move.to;
+  const moving = next[fromRow][fromCol];
+  next[toRow][toCol] = moving.type === "pawn" && (toRow === 0 || toRow === 7) ? {
+    ...moving,
+    type: "queen"
+  } : moving;
+  next[fromRow][fromCol] = null;
+  return next;
+}
+function playChessCell(session, row, col, level) {
+  if (session.done || !session.playerTurn) return session;
+  const [selectedRow, selectedCol] = session.selected || [-1, -1];
+  if (session.selected && chessMoves(session.board, selectedRow, selectedCol).some(([moveRow, moveCol]) => moveRow === row && moveCol === col)) {
+    const captured = session.board[row][col];
+    let board = applyChessMove(session.board, {
+      from: [selectedRow, selectedCol],
+      to: [row, col]
+    });
+    if (captured?.type === "king") {
+      return {
+        ...session,
+        board,
+        done: true,
+        won: true,
+        score: session.score + 500,
+        status: "King captured — match won!",
+        selected: null
+      };
+    }
+    const depth = Math.min(3, 2 + Math.floor(level / 45));
+    const aiMove = findBestChessMove(board, chessMoves, depth);
+    if (!aiMove) {
+      return {
+        ...session,
+        board,
+        done: true,
+        won: true,
+        score: session.score + 400,
+        status: "Opponent has no legal moves — you win!",
+        selected: null
+      };
+    }
+    const aiCaptured = board[aiMove.to[0]][aiMove.to[1]];
+    board = applyChessMove(board, aiMove);
+    if (aiCaptured?.type === "king") {
+      return {
+        ...session,
+        board,
+        done: true,
+        won: false,
+        status: "Your king was captured. Try again.",
+        selected: null
+      };
+    }
+    return {
+      ...session,
+      board,
+      selected: null,
+      moves: session.moves + 1,
+      status: `Opponent replied using depth-${depth} minimax with alpha-beta pruning.`
     };
-    window.addEventListener("keydown",handleKey);return()=>window.removeEventListener("keydown",handleKey);
-  },[game.id]);
-  useEffect(()=>{ if(!["tetris","snake","pac-man","tower-defense"].includes(game.id))return undefined; const delay=game.id==="tetris"?Math.max(120,520-level*3):game.id==="snake"?Math.max(85,170-level):game.id==="pac-man"?210:300; const timer=window.setInterval(()=>setSession((prev)=>game.id==="tetris"?(prev.done?prev:(tetrisCollision(prev.board,prev.piece,0,1)?lockTetris(prev):{...prev,piece:{...prev.piece,y:prev.piece.y+1}})):game.id==="snake"?moveSnake(prev):game.id==="pac-man"?tickPacman(prev):tickTower(prev)),delay);return()=>window.clearInterval(timer);},[game.id,level]);
-  const reset=()=>{reportedRef.current=false;setSession(createSession(game.id,level));};
-  const update=(fn)=>setSession((prev)=>fn(prev));
-  const handleDirection=(direction)=>{
-    const delta={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[direction];
-    if(game.id==="tetris"){setSession((prev)=>moveTetris(prev,{up:"ArrowUp",down:"ArrowDown",left:"ArrowLeft",right:"ArrowRight"}[direction]));return;}
-    if(game.id==="snake"){setSession((prev)=>{const reverse={up:"down",down:"up",left:"right",right:"left"};return reverse[prev.direction]===direction?prev:{...prev,nextDirection:direction};});return;}
-    if(game.id==="pac-man")setSession((prev)=>movePacman(prev,delta[0],delta[1]));
-    if(game.id==="2048")setSession((prev)=>move2048(prev,direction));
-    if(game.id==="portal-puzzle")setSession((prev)=>movePortal(prev,delta[0],delta[1]));
-    if(game.id==="maze-solver")setSession((prev)=>moveMaze(prev,delta[0],delta[1]));
+  }
+  if (session.board[row][col]?.color === "white") return {
+    ...session,
+    selected: [row, col]
   };
-  const renderSurface=()=>{
-    const s=session; switch(game.id){
-      case "tetris": { const occupied=copyGrid(s.board); s.piece.shape.forEach((row,y)=>row.forEach((cell,x)=>{if(cell&&s.piece.y+y>=0&&s.piece.y+y<20&&s.piece.x+x>=0&&s.piece.x+x<10)occupied[s.piece.y+y][s.piece.x+x]=s.piece.color;})); return <div className="tetris-layout"><div className="tetris-board">{occupied.flatMap((row,r)=>row.map((cell,c)=><span key={`${r}-${c}`} className={cell?"filled":""} style={cell?{"--cell-color":cell}:undefined}/>))}</div><div className="game-mini-panel"><b>LINES</b><strong>{s.lines}/{s.targetLines}</strong><b>LEVEL SPEED</b><strong>{Math.max(120,520-level*3)}ms</strong><p>Keep the stack low. Hard drop gives bonus points.</p><button className="arcade-secondary" onClick={()=>update((prev)=>moveTetris(prev," "))}>HARD DROP ⤓</button></div></div>; }
-      case "pac-man": return <div className="pac-board" style={{"--cols":15}}>{s.grid.flatMap((row,y)=>row.map((wall,x)=>{const isPlayer=s.player.x===x&&s.player.y===y;const ghost=s.ghosts.find((g)=>g.x===x&&g.y===y);const pellet=s.pellets.has(`${x},${y}`);return <span key={`${x}-${y}`} className={`pac-cell ${wall?"wall":""} ${pellet?"pellet":""} ${isPlayer?"pac-player":""} ${ghost?"pac-ghost":""}`}>{isPlayer?"●":ghost?"👾":pellet?"·":""}</span>;}))}</div>;
-      case "chess": return <div className="chess-board">{s.board.flatMap((row,r)=>row.map((piece,c)=><button key={`${r}-${c}`} className={`chess-square ${(r+c)%2?"dark":"light"} ${s.selected?.[0]===r&&s.selected?.[1]===c?"selected":""} ${s.selected&&chessMoves(s.board,s.selected[0],s.selected[1]).some(([mr,mc])=>mr===r&&mc===c)?"legal":""}`} onClick={()=>update((prev)=>{if(prev.done||!prev.playerTurn)return prev;const [sr,sc]=prev.selected||[-1,-1];if(prev.selected&&chessMoves(prev.board,sr,sc).some(([mr,mc])=>mr===r&&mc===c)){const board=prev.board.map((line)=>line.slice());const moving=board[sr][sc];const captured=board[r][c];board[r][c]=moving;board[sr][sc]=null;if(moving.type==="pawn"&&(r===0||r===7))board[r][c]={...moving,type:"queen"};if(captured?.type==="king")return {...prev,board,done:true,won:true,score:prev.score+500,status:"King captured — match won!",selected:null};const blackMoves=[];board.forEach((line,rr)=>line.forEach((p,cc)=>{if(p?.color==="black")chessMoves(board,rr,cc).forEach(([mr,mc])=>blackMoves.push({from:[rr,cc],to:[mr,mc],capture:board[mr][mc]?.color==="white"}));}));blackMoves.sort((a,b)=>Number(b.capture)-Number(a.capture));if(blackMoves.length){const choice=blackMoves[Math.floor(Math.random()*Math.min(blackMoves.length,Math.max(1,4-Math.floor(level/35))))];const [ar,ac]=choice.from;const [br,bc]=choice.to;const blackPiece=board[ar][ac];const whiteCaptured=board[br][bc];board[br][bc]=blackPiece;board[ar][ac]=null;if(whiteCaptured?.type==="king")return {...prev,board,done:true,won:false,status:"Your king was captured. Try again.",selected:null};}return {...prev,board,selected:null,moves:prev.moves+1,status:"Your move is complete. Find the next tactic."};}if(prev.board[r][c]?.color==="white")return {...prev,selected:[r,c]};return {...prev,selected:null};})}>{piece?CHESS_SYMBOL[piece.color][piece.type]:""}</button>))}</div>;
-      case "blockcraft": return <><div className="builder-toolbar"><span>🪵 Wood: <b>{s.wood}</b></span><span>🪨 Stone: <b>{s.stone}</b></span><span>Built: <b>{s.built}/{s.targetBuild}</b></span>{[["house","🏠 House"],["wall","🧱 Wall"],["lamp","💡 Lamp"]].map(([id,label])=><button key={id} className={s.selectedBuild===id?"active":""} onClick={()=>update((prev)=>({...prev,selectedBuild:id}))}>{label}</button>)}</div><div className="block-grid">{s.grid.flatMap((row,y)=>row.map((tile,x)=><button key={`${x}-${y}`} className={`block-tile ${tile}`} onClick={()=>update((prev)=>{if(prev.done)return prev;const grid=copyGrid(prev.grid);if(tile==="tree"){grid[y][x]="grass";return {...prev,grid,wood:prev.wood+2,score:prev.score+10,status:"Harvested wood."};}if(tile==="stone"){grid[y][x]="grass";return {...prev,grid,stone:prev.stone+2,score:prev.score+10,status:"Collected stone."};}if(tile==="water")return {...prev,status:"Water cannot be built on."};if(tile!=="grass")return prev;const cost=prev.selectedBuild==="house"?1:prev.selectedBuild==="wall"?1:0;if(prev.wood<cost)return {...prev,status:`Need ${cost} wood to build this.`};grid[y][x]=prev.selectedBuild;const built=prev.built+1;const win=built>=prev.targetBuild;return {...prev,grid,wood:prev.wood-cost,built,score:prev.score+25,done:win,won:win,status:win?"Settlement build quota reached!":"Structure placed."};})}>{({grass:"🌱",tree:"🌳",stone:"🪨",water:"🌊",house:"🏠",wall:"🧱",lamp:"💡"})[tile]}</button>))}</div></>;
-      case "snake": return <div className="snake-board" style={{"--cols":s.gridW}}>{Array.from({length:s.gridW*s.gridH},(_,i)=>{const x=i%s.gridW,y=Math.floor(i/s.gridW);const head=s.snake[0];const isSnake=s.snake.some((part)=>part.x===x&&part.y===y);return <span key={i} className={`${isSnake?"snake-part":""} ${head.x===x&&head.y===y?"snake-head":""} ${samePos(s.food,{x,y})?"snake-food":""}`}>{samePos(s.food,{x,y})?"🍎":""}</span>;})}</div>;
-      case "sudoku": return <><div className="sudoku-board">{s.values.flatMap((row,r)=>row.map((value,c)=><button key={`${r}-${c}`} className={`${s.fixed[r][c]?"fixed":"editable"} ${s.selected[0]===r&&s.selected[1]===c?"selected":""} ${(c===2||c===5)?"box-right":""} ${(r===2||r===5)?"box-bottom":""}`} onClick={()=>update((prev)=>({...prev,selected:[r,c]}))}>{value||""}</button>))}</div><div className="number-pad">{[1,2,3,4,5,6,7,8,9].map((n)=><button key={n} onClick={()=>update((prev)=>revealSudoku(prev,n))}>{n}</button>)}<button onClick={()=>update((prev)=>revealSudoku(prev,0))}>Clear</button><button onClick={()=>update((prev)=>{const values=copyGrid(prev.values);prev.solution.forEach((row,r)=>row.forEach((v,c)=>{if(!prev.fixed[r][c])values[r][c]=v;}));return {...prev,values,score:prev.score+100,done:true,won:true,status:"Solution checked — puzzle complete."};})}>Solve</button></div></>;
-      case "tower-defense": return <><div className="tower-toolbar"><span>Base integrity <b>{s.baseHp}/10</b></span><span>Coins <b>◈ {s.coins}</b></span><span>Wave <b>{s.spawned}/{s.waveSize}</b></span><button className="arcade-secondary" onClick={()=>update((prev)=>({...prev,status:"Place turrets near the route. They target the closest enemy."}))}>TURRET COST: 40</button></div><div className="tower-board">{Array.from({length:80},(_,i)=>{const x=i%10,y=Math.floor(i/10);const tower=s.towers.find((t)=>t.x===x&&t.y===y);const enemy=s.enemies.find((e)=>Math.floor(e.x)===x&&e.y===y);const path=y===3;return <button key={i} className={`tower-cell ${path?"path":""} ${tower?"has-tower":""} ${enemy?"has-enemy":""}`} onClick={()=>update((prev)=>{if(prev.done||path||prev.towers.some((t)=>t.x===x&&t.y===y))return prev;if(prev.coins<40)return {...prev,status:"Not enough coins for a turret."};return {...prev,towers:[...prev.towers,{x,y,cooldown:0}],coins:prev.coins-40,status:"Turret deployed."};})}>{enemy?"👾":tower?"🔫":path?"·":""}</button>;})}</div></>;
-      case "2048": return <div className="merge-board">{s.grid.flatMap((row,r)=>row.map((value,c)=><button key={`${r}-${c}`} className={`merge-tile tile-${Math.min(value,2048)}`} onClick={()=>{}}>{value||""}</button>))}</div>;
-      case "rubiks-cube": return <><div className="cube-layout">{CUBE_FACE_NAMES.map((face,faceIndex)=><div className="cube-face-wrap" key={face}><b>{face}</b><div className="cube-face">{s.stickers.slice(faceIndex*9,faceIndex*9+9).map((color,i)=><button key={i} style={{background:CUBE_COLORS[color]}} aria-label={`${face} sticker ${i+1}`}/>)}</div><div className="cube-turns"><button onClick={()=>update((prev)=>{const stickers=rotateCubeFace(prev.stickers,faceIndex,1);const win=cubeSolved(stickers);return {...prev,stickers,moves:prev.moves+1,score:prev.score+5,done:win,won:win,status:win?"Cube solved!":"Face turned clockwise."};})}>↻</button><button onClick={()=>update((prev)=>{const stickers=rotateCubeFace(prev.stickers,faceIndex,-1);const win=cubeSolved(stickers);return {...prev,stickers,moves:prev.moves+1,score:prev.score+5,done:win,won:win,status:win?"Cube solved!":"Face turned counter-clockwise."};})}>↶</button></div></div>)}</div><p className="board-hint">Faces: U top · R right · F front · D bottom · L left · B back</p></>;
-      case "portal-puzzle": return <div className="portal-board" style={{"--cols":12}}>{s.grid.flatMap((row,y)=>row.map((wall,x)=>{const player=s.player.x===x&&s.player.y===y;const portal=s.portals.some((p)=>p.x===x&&p.y===y);return <span key={`${x}-${y}`} className={`portal-cell ${wall?"wall":""} ${portal?"portal":""} ${samePos(s.goal,{x,y})?"goal":""} ${player?"player":""}`}>{player?"🧑":portal?"🌀":samePos(s.goal,{x,y})?"🚪":""}</span>;}))}</div>;
-      case "wordle": return <><div className="wordle-grid">{Array.from({length:6},(_,r)=>Array.from({length:5},(_,c)=>{const guess=s.guesses[r]||"";const letter=guess[c]||((r===s.guesses.length)?s.current[c]||"":"");let state="";if(guess){if(letter===s.answer[c])state="correct";else if(s.answer.includes(letter))state="present";else state="absent";}return <span key={`${r}-${c}`} className={state}>{letter}</span>;}))}</div><form className="wordle-entry" onSubmit={(event)=>{event.preventDefault();update((prev)=>{if(prev.done||prev.current.trim().length!==5)return {...prev,status:"Enter exactly five letters."};const guess=prev.current.trim().toUpperCase();const guesses=[...prev.guesses,guess];const won=guess===prev.answer;const lost=!won&&guesses.length>=prev.maxGuesses;return {...prev,guesses,current:"",moves:prev.moves+1,score:prev.score+(won?500:0),done:won||lost,won,status:won?"Correct — word cracked!":lost?`The word was ${prev.answer}.`:"Guess recorded."};})}}><input value={s.current} maxLength={5} onChange={(event)=>update((prev)=>({...prev,current:event.target.value.toUpperCase().replace(/[^A-Z]/g,"")}))} disabled={s.done} placeholder="TYPE A 5-LETTER WORD" aria-label="Five-letter guess"/><button className="arcade-primary" disabled={s.done}>GUESS ↗</button></form></>;
-      case "minesweeper": return <><div className="mine-toolbar"><span>💣 Mines: <b>{s.mineCount}</b></span><span>Flags: <b>{s.flagged.flat().filter(Boolean).length}</b></span><button className="arcade-secondary" onClick={()=>update((prev)=>({...prev,revealed:Array.from({length:9},()=>Array(9).fill(false)),flagged:Array.from({length:9},()=>Array(9).fill(false)),done:false,won:false,score:0,status:"Board reset."}))}>RESET BOARD</button></div><div className="mine-board">{s.numbers.flatMap((row,r)=>row.map((number,c)=><button key={`${r}-${c}`} className={`mine-cell ${s.revealed[r][c]?"revealed":""} ${s.flagged[r][c]?"flagged":""} number-${number}`} onContextMenu={(event)=>{event.preventDefault();update((prev)=>{if(prev.done||prev.revealed[r][c])return prev;const flagged=copyGrid(prev.flagged);flagged[r][c]=!flagged[r][c];return {...prev,flagged};});}} onClick={()=>update((prev)=>revealMineCell(prev,r,c))}>{s.flagged[r][c]?"🚩":s.revealed[r][c]?(s.mines[r][c]?"💣":number||""):""}</button>))}</div></>;
-      case "candy-match": return <><div className="candy-toolbar"><span>Score <b>{s.score}/{s.target}</b></span><span>Turns <b>{s.turns}</b></span><span>Matches <b>{s.matches}</b></span></div><div className="candy-board">{s.grid.flatMap((row,r)=>row.map((value,c)=><button key={`${r}-${c}`} className={`candy candy-${value} ${s.selected?.[0]===r&&s.selected?.[1]===c?"selected":""}`} onClick={()=>update((prev)=>{if(prev.done||prev.turns<=0)return prev;if(!prev.selected)return {...prev,selected:[r,c]};const [sr,sc]=prev.selected;if(Math.abs(sr-r)+Math.abs(sc-c)!==1)return {...prev,selected:[r,c]};const grid=copyGrid(prev.grid);[grid[sr][sc],grid[r][c]]=[grid[r][c],grid[sr][sc]];const hits=findCandyMatches(grid);if(!hits.size)return {...prev,grid,selected:null,turns:prev.turns-1,status:"No match — try another swap."};hits.forEach((point)=>{const [rr,cc]=point.split(",").map(Number);grid[rr][cc]=Math.floor(Math.random()*6);});const score=prev.score+hits.size*10;const matches=prev.matches+1;const win=score>=prev.target;const lost=!win&&prev.turns<=1;return {...prev,grid,selected:null,turns:prev.turns-1,score,matches,done:win||lost,won:win,status:win?"Target score reached!":lost?"Out of turns — retry the level.":`Nice match: ${hits.size} candies cleared.`};})}>{["●","◆","■","★","♥","✦"][value]}</button>))}</div></>;
-      case "city-builder": return <><div className="city-toolbar"><span>Funds <b>◈ {s.money}</b></span><span>Population <b>👥 {s.population}/{s.targetPopulation}</b></span><span>Homes <b>{s.grid.flat().filter((v)=>v==="house").length}</b></span>{[["road","🛣️ Road"],["house","🏠 Home"],["park","🌳 Park"],["service","🏥 Service"]].map(([id,label])=><button key={id} className={s.selected===id?"active":""} onClick={()=>update((prev)=>({...prev,selected:id}))}>{label}</button>)}</div><div className="city-board">{s.grid.flatMap((row,r)=>row.map((tile,c)=><button key={`${r}-${c}`} className={`city-tile ${tile}`} onClick={()=>update((prev)=>{if(prev.done)return prev;if(tile!=="empty")return {...prev,status:"That tile is already developed."};const cost={road:10,house:60,park:35,service:90}[prev.selected];if(prev.money<cost)return {...prev,status:"Not enough funds."};const grid=copyGrid(prev.grid);grid[r][c]=prev.selected;const connected=([[r-1,c],[r+1,c],[r,c-1],[r,c+1]]).some(([rr,cc])=>grid[rr]?.[cc]==="road");let population=prev.population;if(prev.selected==="house"&&connected)population+=2;if(prev.selected==="service")population+=1;const win=population>=prev.targetPopulation;return {...prev,grid,money:prev.money-cost,population,buildings:prev.buildings+1,score:prev.score+10,done:win,won:win,status:win?"Your neighbourhood is thriving!":prev.selected==="house"&&!connected?"Home built — connect it to a road for residents.":"Construction complete."};})}>{({empty:"",road:"🛣️",house:"🏠",park:"🌳",service:"🏥"})[tile]}</button>))}</div></>;
-      case "solitaire": return <><div className="solitaire-top"><button className="solitaire-pile stock" onClick={()=>update((prev)=>clickSolitaire(prev,{type:"stock"}))}>{s.stock.length?"🂠":"↻"}<small>{s.stock.length||"Recycle"}</small></button><div className="solitaire-waste" onClick={()=>update((prev)=>clickSolitaire(prev,{type:"waste"}))}>{s.waste.length?<SolitaireCard card={s.waste[s.waste.length-1]} selected={s.selected?.type==="waste"}/>:<span className="solitaire-empty">Waste</span>}</div><div className="solitaire-foundations">{s.foundations.map((pile,i)=><button key={i} className="solitaire-pile foundation" onClick={()=>update((prev)=>clickSolitaire(prev,{type:"foundation",pile:i}))}>{pile.length?<SolitaireCard card={pile[pile.length-1]}/>:<span>{["♠","♥","♦","♣"][i]}</span>}</button>)}</div></div><div className="solitaire-tableau">{s.tableau.map((pile,i)=><div className="solitaire-column" key={i} onClick={()=>{if(!pile.length&&s.selected)update((prev)=>clickSolitaire(prev,{type:"tableau",pile:i,index:0}));}}>{pile.length?pile.map((card,j)=><button key={card.id} className={`solitaire-card ${card.faceUp?"face-up":"face-down"} ${s.selected?.type==="tableau"&&s.selected.pile===i&&s.selected.index===j?"selected":""}`} style={{top:j*22,zIndex:j+1}} onClick={(event)=>{event.stopPropagation();update((prev)=>clickSolitaire(prev,{type:"tableau",pile:i,index:j}));}}>{card.faceUp?<SolitaireCard card={card}/>:"🂠"}</button>):<span className="solitaire-empty">K</span>}</div>)}</div><p className="board-hint">Select a face-up card or stack, then select a legal column. Foundations accept A→K by suit.</p></>;
-      case "maze-solver": {const pathSet=new Set(s.path.map((p)=>`${p.x},${p.y}`));return <><div className="maze-tools">{["BFS","DFS","Dijkstra","A*"].map((algorithm)=><button key={algorithm} className={s.algorithm===algorithm?"active":""} onClick={()=>update((prev)=>({...prev,algorithm,path:solveMaze(prev.grid,algorithm),status:`${algorithm} found a path of ${solveMaze(prev.grid,algorithm).length} cells.`}))}>{algorithm}</button>)}<button className="arcade-primary" onClick={()=>update((prev)=>{const path=solveMaze(prev.grid,prev.algorithm);const win=path.length>0;return {...prev,path,player:win?{...prev.goal}:{...prev.player},done:win,won:win,score:prev.score+path.length*2,status:win?`${prev.algorithm} completed the maze.`:"No route found."};})}>AUTO SOLVE ↗</button></div><div className="maze-board">{s.grid.flatMap((row,y)=>row.map((wall,x)=><span key={`${x}-${y}`} className={`maze-cell ${wall?"wall":""} ${pathSet.has(`${x},${y}`)?"path":""} ${samePos(s.player,{x,y})?"player":""} ${samePos(s.goal,{x,y})?"goal":""}`}>{samePos(s.player,{x,y})?"●":samePos(s.goal,{x,y})?"⚑":""}</span>))}</div></>; }
-      default: return <p>Choose a game to begin.</p>;
+  return {
+    ...session,
+    selected: null
+  };
+}
+function connectedCityRoads(grid) {
+  const queue = [];
+  const visited = new Set();
+  grid[4]?.forEach((tile, col) => {
+    if (tile === "road") {
+      queue.push([4, col]);
+      visited.add(`4,${col}`);
+    }
+  });
+  let head = 0;
+  while (head < queue.length) {
+    const [row, col] = queue[head++];
+    [[row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1]].forEach(([nextRow, nextCol]) => {
+      const key = `${nextRow},${nextCol}`;
+      if (grid[nextRow]?.[nextCol] !== "road" || visited.has(key)) return;
+      visited.add(key);
+      queue.push([nextRow, nextCol]);
+    });
+  }
+  return visited;
+}
+function calculateCityPopulation(grid, connectedRoads) {
+  let population = 0;
+  grid.forEach((row, r) => row.forEach((tile, c) => {
+    const connected = [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].some(([nr, nc]) => connectedRoads.has(`${nr},${nc}`));
+    if (connected && tile === "house") population += 2;
+    if (connected && tile === "service") population += 1;
+  }));
+  return population;
+}
+function GameSurface({
+  game,
+  level,
+  onWin
+}) {
+  const [session, setSession] = useState(() => createSession(game.id, level));
+  const sessionRef = useRef(session);
+  const onWinRef = useRef(onWin);
+  const reportedRef = useRef(false);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+  useEffect(() => {
+    onWinRef.current = onWin;
+  }, [onWin]);
+  useEffect(() => {
+    if (session.done && session.won && !reportedRef.current) {
+      reportedRef.current = true;
+      onWinRef.current?.(session.score);
+    }
+  }, [session.done, session.won, session.score]);
+  useEffect(() => {
+    const handleKey = event => {
+      const key = event.key;
+      const low = key.toLowerCase();
+      const id = game.id;
+      const state = sessionRef.current;
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(key) && ["tetris", "snake", "pac-man", "2048", "portal-puzzle", "maze-solver"].includes(id)) event.preventDefault();
+      if (id === "tetris" && (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", " ", "a", "d", "s", "w"].includes(key) || ["a", "d", "s", "w"].includes(low))) setSession(prev => moveTetris(prev, ["a", "d", "s", "w"].includes(low) ? low : key));
+      if (id === "snake") {
+        const dir = {
+          ArrowUp: "up",
+          w: "up",
+          ArrowDown: "down",
+          s: "down",
+          ArrowLeft: "left",
+          a: "left",
+          ArrowRight: "right",
+          d: "right"
+        }[key] || {
+          w: "up",
+          s: "down",
+          a: "left",
+          d: "right"
+        }[low];
+        if (dir) {
+          const reverse = {
+            up: "down",
+            down: "up",
+            left: "right",
+            right: "left"
+          };
+          if (reverse[state.direction] !== dir) setSession(prev => ({
+            ...prev,
+            nextDirection: dir
+          }));
+        }
+      }
+      if (id === "pac-man") {
+        const delta = {
+          ArrowUp: [0, -1],
+          w: [0, -1],
+          ArrowDown: [0, 1],
+          s: [0, 1],
+          ArrowLeft: [-1, 0],
+          a: [-1, 0],
+          ArrowRight: [1, 0],
+          d: [1, 0]
+        }[key] || {
+          w: [0, -1],
+          s: [0, 1],
+          a: [-1, 0],
+          d: [1, 0]
+        }[low];
+        if (delta) setSession(prev => movePacman(prev, delta[0], delta[1]));
+      }
+      if (id === "2048") {
+        const dir = {
+          ArrowUp: "up",
+          w: "up",
+          ArrowDown: "down",
+          s: "down",
+          ArrowLeft: "left",
+          a: "left",
+          ArrowRight: "right",
+          d: "right"
+        }[key] || {
+          w: "up",
+          s: "down",
+          a: "left",
+          d: "right"
+        }[low];
+        if (dir) setSession(prev => move2048(prev, dir));
+      }
+      if (id === "portal-puzzle" || id === "maze-solver") {
+        const delta = {
+          ArrowUp: [0, -1],
+          w: [0, -1],
+          ArrowDown: [0, 1],
+          s: [0, 1],
+          ArrowLeft: [-1, 0],
+          a: [-1, 0],
+          ArrowRight: [1, 0],
+          d: [1, 0]
+        }[key] || {
+          w: [0, -1],
+          s: [0, 1],
+          a: [-1, 0],
+          d: [1, 0]
+        }[low];
+        if (delta) setSession(prev => id === "portal-puzzle" ? movePortal(prev, delta[0], delta[1]) : moveMaze(prev, delta[0], delta[1]));
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [game.id]);
+  useEffect(() => {
+    if (!["tetris", "snake", "pac-man", "tower-defense"].includes(game.id)) return undefined;
+    const delay = game.id === "tetris" ? Math.max(120, 520 - level * 3) : game.id === "snake" ? Math.max(85, 170 - level) : game.id === "pac-man" ? 210 : 300;
+    const timer = window.setInterval(() => setSession(prev => game.id === "tetris" ? prev.done ? prev : tetrisCollision(prev.board, prev.piece, 0, 1) ? lockTetris(prev) : {
+      ...prev,
+      piece: {
+        ...prev.piece,
+        y: prev.piece.y + 1
+      }
+    } : game.id === "snake" ? moveSnake(prev) : game.id === "pac-man" ? tickPacman(prev) : tickTower(prev)), delay);
+    return () => window.clearInterval(timer);
+  }, [game.id, level]);
+  const reset = () => {
+    reportedRef.current = false;
+    setSession(createSession(game.id, level));
+  };
+  const update = fn => setSession(prev => fn(prev));
+  const handleDirection = direction => {
+    const delta = {
+      up: [0, -1],
+      down: [0, 1],
+      left: [-1, 0],
+      right: [1, 0]
+    }[direction];
+    if (game.id === "tetris") {
+      setSession(prev => moveTetris(prev, {
+        up: "ArrowUp",
+        down: "ArrowDown",
+        left: "ArrowLeft",
+        right: "ArrowRight"
+      }[direction]));
+      return;
+    }
+    if (game.id === "snake") {
+      setSession(prev => {
+        const reverse = {
+          up: "down",
+          down: "up",
+          left: "right",
+          right: "left"
+        };
+        return reverse[prev.direction] === direction ? prev : {
+          ...prev,
+          nextDirection: direction
+        };
+      });
+      return;
+    }
+    if (game.id === "pac-man") setSession(prev => movePacman(prev, delta[0], delta[1]));
+    if (game.id === "2048") setSession(prev => move2048(prev, direction));
+    if (game.id === "portal-puzzle") setSession(prev => movePortal(prev, delta[0], delta[1]));
+    if (game.id === "maze-solver") setSession(prev => moveMaze(prev, delta[0], delta[1]));
+  };
+  const renderSurface = () => {
+    const s = session;
+    switch (game.id) {
+      case "tetris":
+        {
+          const occupied = copyGrid(s.board);
+          s.piece.shape.forEach((row, y) => row.forEach((cell, x) => {
+            if (cell && s.piece.y + y >= 0 && s.piece.y + y < 20 && s.piece.x + x >= 0 && s.piece.x + x < 10) occupied[s.piece.y + y][s.piece.x + x] = s.piece.color;
+          }));
+          return <div className="tetris-layout"><div className="tetris-board">{occupied.flatMap((row, r) => row.map((cell, c) => <span key={`${r}-${c}`} className={cell ? "filled" : ""} style={cell ? {
+                "--cell-color": cell
+              } : undefined} />))}</div><div className="game-mini-panel"><b>LINES</b><strong>{s.lines}/{s.targetLines}</strong><b>LEVEL SPEED</b><strong>{Math.max(120, 520 - level * 3)}ms</strong><p>Keep the stack low. Hard drop gives bonus points.</p><button className="arcade-secondary" onClick={() => update(prev => moveTetris(prev, " "))}>HARD DROP ⤓</button></div></div>;
+        }
+      case "pac-man":
+        return <div className="pac-board" style={{
+          "--cols": 15
+        }}>{s.grid.flatMap((row, y) => row.map((wall, x) => {
+            const isPlayer = s.player.x === x && s.player.y === y;
+            const ghost = s.ghosts.find(g => g.x === x && g.y === y);
+            const pellet = s.pellets.has(`${x},${y}`);
+            return <span key={`${x}-${y}`} className={`pac-cell ${wall ? "wall" : ""} ${pellet ? "pellet" : ""} ${isPlayer ? "pac-player" : ""} ${ghost ? "pac-ghost" : ""}`}>{isPlayer ? "●" : ghost ? "👾" : pellet ? "·" : ""}</span>;
+          }))}</div>;
+      case "chess":
+        return <div className="chess-board">{s.board.flatMap((row, r) => row.map((piece, c) => <button key={`${r}-${c}`} className={`chess-square ${(r + c) % 2 ? "dark" : "light"} ${s.selected?.[0] === r && s.selected?.[1] === c ? "selected" : ""} ${s.selected && chessMoves(s.board, s.selected[0], s.selected[1]).some(([mr, mc]) => mr === r && mc === c) ? "legal" : ""}`} onClick={() => update(previous => playChessCell(previous, r, c, level))} aria-label={`${piece?.color || "empty"} ${piece?.type || "square"} ${r + 1},${c + 1}`}>{piece ? CHESS_SYMBOL[piece.color][piece.type] : ""}</button>))}</div>;
+      case "blockcraft":
+        return <><div className="builder-toolbar"><span>🪵 Wood: <b>{s.wood}</b></span><span>🪨 Stone: <b>{s.stone}</b></span><span>Built: <b>{s.built}/{s.targetBuild}</b></span>{[["house", "🏠 House"], ["wall", "🧱 Wall"], ["lamp", "💡 Lamp"]].map(([id, label]) => <button key={id} className={s.selectedBuild === id ? "active" : ""} onClick={() => update(prev => ({
+              ...prev,
+              selectedBuild: id
+            }))}>{label}</button>)}</div><div className="block-grid">{s.grid.flatMap((row, y) => row.map((tile, x) => <button key={`${x}-${y}`} className={`block-tile ${tile}`} onClick={() => update(prev => {
+              if (prev.done) return prev;
+              const grid = copyGrid(prev.grid);
+              if (tile === "tree") {
+                grid[y][x] = "grass";
+                return {
+                  ...prev,
+                  grid,
+                  wood: prev.wood + 2,
+                  score: prev.score + 10,
+                  status: "Harvested wood."
+                };
+              }
+              if (tile === "stone") {
+                grid[y][x] = "grass";
+                return {
+                  ...prev,
+                  grid,
+                  stone: prev.stone + 2,
+                  score: prev.score + 10,
+                  status: "Collected stone."
+                };
+              }
+              if (tile === "water") return {
+                ...prev,
+                status: "Water cannot be built on."
+              };
+              if (tile !== "grass") return prev;
+              const cost = prev.selectedBuild === "house" ? 1 : prev.selectedBuild === "wall" ? 1 : 0;
+              if (prev.wood < cost) return {
+                ...prev,
+                status: `Need ${cost} wood to build this.`
+              };
+              grid[y][x] = prev.selectedBuild;
+              const built = prev.built + 1;
+              const win = built >= prev.targetBuild;
+              return {
+                ...prev,
+                grid,
+                wood: prev.wood - cost,
+                built,
+                score: prev.score + 25,
+                done: win,
+                won: win,
+                status: win ? "Settlement build quota reached!" : "Structure placed."
+              };
+            })}>{{
+                grass: "🌱",
+                tree: "🌳",
+                stone: "🪨",
+                water: "🌊",
+                house: "🏠",
+                wall: "🧱",
+                lamp: "💡"
+              }[tile]}</button>))}</div></>;
+      case "snake":
+        return <div className="snake-board" style={{
+          "--cols": s.gridW
+        }}>{Array.from({
+            length: s.gridW * s.gridH
+          }, (_, i) => {
+            const x = i % s.gridW,
+              y = Math.floor(i / s.gridW);
+            const head = s.snake[0];
+            const isSnake = s.snake.some(part => part.x === x && part.y === y);
+            return <span key={i} className={`${isSnake ? "snake-part" : ""} ${head.x === x && head.y === y ? "snake-head" : ""} ${samePos(s.food, {
+              x,
+              y
+            }) ? "snake-food" : ""}`}>{samePos(s.food, {
+                x,
+                y
+              }) ? "🍎" : ""}</span>;
+          })}</div>;
+      case "sudoku":
+        return <><div className="sudoku-board">{s.values.flatMap((row, r) => row.map((value, c) => <button key={`${r}-${c}`} className={`${s.fixed[r][c] ? "fixed" : "editable"} ${s.selected[0] === r && s.selected[1] === c ? "selected" : ""} ${c === 2 || c === 5 ? "box-right" : ""} ${r === 2 || r === 5 ? "box-bottom" : ""}`} onClick={() => update(prev => ({
+              ...prev,
+              selected: [r, c]
+            }))}>{value || ""}</button>))}</div><div className="number-pad">{[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => <button key={n} onClick={() => update(prev => revealSudoku(prev, n))}>{n}</button>)}<button onClick={() => update(prev => revealSudoku(prev, 0))}>Clear</button><button onClick={() => update(prev => {
+              const result = solveSudoku(prev.values);
+              if (!result.solution) return {
+                ...prev,
+                status: "This board has conflicting entries; clear the conflict and solve again."
+              };
+              return {
+                ...prev,
+                values: result.solution,
+                score: prev.score + 100,
+                done: true,
+                won: true,
+                status: "Puzzle solved by the backtracking engine (MRV + bit masks)."
+              };
+            })}>Solve with Backtracking</button></div></>;
+      case "tower-defense":
+        {
+          const routeCells = new Set(s.route.map(point => `${point.x},${point.y}`));
+          return <><div className="tower-toolbar"><span>Base integrity <b>{s.baseHp}/10</b></span><span>Coins <b>◈ {s.coins}</b></span><span>Wave <b>{s.spawned}/{s.waveSize}</b></span><span>ROUTE <b>BFS · {s.route.length} nodes</b></span><button className="arcade-secondary" onClick={() => update(prev => ({
+                ...prev,
+                status: "Enemies follow the BFS route. Turrets prioritize the most advanced enemy using a min-heap."
+              }))}>TURRET COST: 40</button></div><div className="tower-board">{Array.from({
+                length: 80
+              }, (_, i) => {
+                const x = i % 10;
+                const y = Math.floor(i / 10);
+                const tower = s.towers.find(item => item.x === x && item.y === y);
+                const enemy = s.enemies.find(item => Math.round(item.x) === x && Math.round(item.y) === y);
+                const path = routeCells.has(`${x},${y}`);
+                const wall = s.walls[y][x] === 1;
+                return <button key={i} className={`tower-cell ${path ? "path" : ""} ${wall ? "wall" : ""} ${tower ? "has-tower" : ""} ${enemy ? "has-enemy" : ""}`} disabled={wall || path || Boolean(tower)} onClick={() => update(prev => {
+                  if (prev.done || prev.walls[y][x] || prev.route.some(point => point.x === x && point.y === y) || prev.towers.some(item => item.x === x && item.y === y)) return prev;
+                  if (prev.coins < 40) return {
+                    ...prev,
+                    status: "Not enough coins for a turret."
+                  };
+                  return {
+                    ...prev,
+                    towers: [...prev.towers, {
+                      x,
+                      y,
+                      cooldown: 0
+                    }],
+                    coins: prev.coins - 40,
+                    status: "Turret deployed."
+                  };
+                })}>{enemy ? "👾" : tower ? "🔫" : path ? "·" : ""}</button>;
+              })}</div></>;
+        }
+      case "2048":
+        return <div className="merge-board">{s.grid.flatMap((row, r) => row.map((value, c) => <button key={`${r}-${c}`} className={`merge-tile tile-${Math.min(value, 2048)}`} onClick={() => {}}>{value || ""}</button>))}</div>;
+      case "rubiks-cube":
+        return <><div className="cube-layout">{CUBE_FACE_NAMES.map((face, faceIndex) => <div className="cube-face-wrap" key={face}><b>{face}</b><div className="cube-face">{s.stickers.slice(faceIndex * 9, faceIndex * 9 + 9).map((color, i) => <button key={i} style={{
+                  background: CUBE_COLORS[color]
+                }} aria-label={`${face} sticker ${i + 1}`} />)}</div><div className="cube-turns"><button onClick={() => update(prev => {
+                  const stickers = rotateCubeFace(prev.stickers, faceIndex, 1);
+                  const win = cubeSolved(stickers);
+                  return {
+                    ...prev,
+                    stickers,
+                    moves: prev.moves + 1,
+                    score: prev.score + 5,
+                    done: win,
+                    won: win,
+                    status: win ? "Cube solved!" : "Face turned clockwise."
+                  };
+                })}>↻</button><button onClick={() => update(prev => {
+                  const stickers = rotateCubeFace(prev.stickers, faceIndex, -1);
+                  const win = cubeSolved(stickers);
+                  return {
+                    ...prev,
+                    stickers,
+                    moves: prev.moves + 1,
+                    score: prev.score + 5,
+                    done: win,
+                    won: win,
+                    status: win ? "Cube solved!" : "Face turned counter-clockwise."
+                  };
+                })}>↶</button></div></div>)}</div><p className="board-hint">Faces: U top · R right · F front · D bottom · L left · B back</p></>;
+      case "portal-puzzle":
+        {
+          const pathSet = new Set((s.portalPath || []).map(point => `${point.x},${point.y}`));
+          const visitedSet = new Set((s.portalVisited || []).map(point => `${point.x},${point.y}`));
+          return <><div className="maze-tools"><button className="arcade-primary" onClick={() => update(prev => {
+                const result = solvePortalPath(prev.grid, prev.player, prev.goal, prev.portals);
+                const won = result.path.length > 0;
+                return {
+                  ...prev,
+                  portalPath: result.path,
+                  portalVisited: result.visited,
+                  moves: prev.moves + result.moves,
+                  score: prev.score + (won ? result.moves * 10 + 100 : 0),
+                  done: won,
+                  won,
+                  player: won ? {
+                    ...prev.goal
+                  } : prev.player,
+                  status: won ? `Portal-aware BFS found a ${result.moves}-move route after exploring ${result.explored} states.` : "No portal route found."
+                };
+              })}>BFS ROUTE ↗</button></div><div className="portal-board" style={{
+              "--cols": 12
+            }}>{s.grid.flatMap((row, y) => row.map((wall, x) => {
+                const key = `${x},${y}`;
+                const player = s.player.x === x && s.player.y === y;
+                const portal = s.portals.some(point => point.x === x && point.y === y);
+                return <span key={key} className={`portal-cell ${wall ? "wall" : ""} ${portal ? "portal" : ""} ${visitedSet.has(key) ? "visited" : ""} ${pathSet.has(key) ? "path" : ""} ${samePos(s.goal, {
+                  x,
+                  y
+                }) ? "goal" : ""} ${player ? "player" : ""}`}>{player ? "🧑" : portal ? "🌀" : samePos(s.goal, {
+                    x,
+                    y
+                  }) ? "🚪" : ""}</span>;
+              }))}</div></>;
+        }
+      case "wordle":
+        return <><div className="wordle-grid">{Array.from({
+              length: 6
+            }, (_, r) => Array.from({
+              length: 5
+            }, (_, c) => {
+              const guess = s.guesses[r] || "";
+              const letter = guess[c] || (r === s.guesses.length ? s.current[c] || "" : "");
+              const feedback = guess ? getWordleFeedback(s.answer, guess)[c] : "";
+              return <span key={`${r}-${c}`} className={feedback}>{letter}</span>;
+            }))}</div><form className="wordle-entry" onSubmit={event => {
+            event.preventDefault();
+            update(prev => {
+              if (prev.done || prev.current.trim().length !== 5) return {
+                ...prev,
+                status: "Enter exactly five letters."
+              };
+              const guess = prev.current.trim().toUpperCase();
+              const guesses = [...prev.guesses, guess];
+              const won = guess === prev.answer;
+              const lost = !won && guesses.length >= prev.maxGuesses;
+              return {
+                ...prev,
+                guesses,
+                current: "",
+                moves: prev.moves + 1,
+                score: prev.score + (won ? 500 : 0),
+                done: won || lost,
+                won,
+                status: won ? "Correct — word cracked!" : lost ? `The word was ${prev.answer}.` : "Guess recorded. Yellow letters use remaining frequency counts."
+              };
+            });
+          }}><input value={s.current} maxLength={5} onChange={event => update(prev => ({
+              ...prev,
+              current: event.target.value.toUpperCase().replace(/[^A-Z]/g, "")
+            }))} disabled={s.done} placeholder="TYPE A 5-LETTER WORD" aria-label="Five-letter guess" /><button className="arcade-primary" disabled={s.done}>GUESS ↗</button></form></>;
+      case "minesweeper":
+        return <><div className="mine-toolbar"><span>💣 Mines: <b>{s.mineCount}</b></span><span>Flags: <b>{s.flagged.flat().filter(Boolean).length}</b></span><button className="arcade-secondary" onClick={() => update(prev => ({
+              ...prev,
+              revealed: Array.from({
+                length: 9
+              }, () => Array(9).fill(false)),
+              flagged: Array.from({
+                length: 9
+              }, () => Array(9).fill(false)),
+              done: false,
+              won: false,
+              score: 0,
+              status: "Board reset."
+            }))}>RESET BOARD</button></div><div className="mine-board">{s.numbers.flatMap((row, r) => row.map((number, c) => <button key={`${r}-${c}`} className={`mine-cell ${s.revealed[r][c] ? "revealed" : ""} ${s.flagged[r][c] ? "flagged" : ""} number-${number}`} onContextMenu={event => {
+              event.preventDefault();
+              update(prev => {
+                if (prev.done || prev.revealed[r][c]) return prev;
+                const flagged = copyGrid(prev.flagged);
+                flagged[r][c] = !flagged[r][c];
+                return {
+                  ...prev,
+                  flagged
+                };
+              });
+            }} onClick={() => update(prev => revealMineCell(prev, r, c))}>{s.flagged[r][c] ? "🚩" : s.revealed[r][c] ? s.mines[r][c] ? "💣" : number || "" : ""}</button>))}</div></>;
+      case "candy-match":
+        return <><div className="candy-toolbar"><span>Score <b>{s.score}/{s.target}</b></span><span>Turns <b>{s.turns}</b></span><span>Matches <b>{s.matches}</b></span></div><div className="candy-board">{s.grid.flatMap((row, r) => row.map((value, c) => <button key={`${r}-${c}`} className={`candy candy-${value} ${s.selected?.[0] === r && s.selected?.[1] === c ? "selected" : ""}`} onClick={() => update(prev => {
+              if (prev.done || prev.turns <= 0) return prev;
+              if (!prev.selected) return {
+                ...prev,
+                selected: [r, c]
+              };
+              const [sr, sc] = prev.selected;
+              if (Math.abs(sr - r) + Math.abs(sc - c) !== 1) return {
+                ...prev,
+                selected: [r, c]
+              };
+              const grid = copyGrid(prev.grid);
+              [grid[sr][sc], grid[r][c]] = [grid[r][c], grid[sr][sc]];
+              const hits = findCandyMatches(grid);
+              if (!hits.size) return {
+                ...prev,
+                grid,
+                selected: null,
+                turns: prev.turns - 1,
+                status: "No match — try another swap."
+              };
+              hits.forEach(point => {
+                const [rr, cc] = point.split(",").map(Number);
+                grid[rr][cc] = Math.floor(Math.random() * 6);
+              });
+              const score = prev.score + hits.size * 10;
+              const matches = prev.matches + 1;
+              const win = score >= prev.target;
+              const lost = !win && prev.turns <= 1;
+              return {
+                ...prev,
+                grid,
+                selected: null,
+                turns: prev.turns - 1,
+                score,
+                matches,
+                done: win || lost,
+                won: win,
+                status: win ? "Target score reached!" : lost ? "Out of turns — retry the level." : `Nice match: ${hits.size} candies cleared.`
+              };
+            })}>{["●", "◆", "■", "★", "♥", "✦"][value]}</button>))}</div></>;
+      case "city-builder":
+        return <><div className="city-toolbar"><span>Funds <b>◈ {s.money}</b></span><span>Population <b>👥 {s.population}/{s.targetPopulation}</b></span><span>Homes <b>{s.grid.flat().filter(v => v === "house").length}</b></span><span>Road network <b>BFS connected</b></span>{[["road", "🛣️ Road"], ["house", "🏠 Home"], ["park", "🌳 Park"], ["service", "🏥 Service"]].map(([id, label]) => <button key={id} className={s.selected === id ? "active" : ""} onClick={() => update(prev => ({
+              ...prev,
+              selected: id
+            }))}>{label}</button>)}</div><div className="city-board">{s.grid.flatMap((row, r) => row.map((tile, c) => <button key={`${r}-${c}`} className={`city-tile ${tile}`} onClick={() => update(prev => {
+              if (prev.done) return prev;
+              if (prev.grid[r][c] !== "empty") return {
+                ...prev,
+                status: "That tile is already developed."
+              };
+              const cost = {
+                road: 10,
+                house: 60,
+                park: 35,
+                service: 90
+              }[prev.selected];
+              if (prev.money < cost) return {
+                ...prev,
+                status: "Not enough funds."
+              };
+              const grid = copyGrid(prev.grid);
+              grid[r][c] = prev.selected;
+              const connectedRoads = connectedCityRoads(grid);
+              const population = calculateCityPopulation(grid, connectedRoads);
+              const win = population >= prev.targetPopulation;
+              const connected = [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].some(([nr, nc]) => connectedRoads.has(`${nr},${nc}`));
+              const status = win ? "Your connected neighbourhood is thriving!" : (prev.selected === "house" || prev.selected === "service") && !connected ? "Building placed — connect it to the main road network to add residents." : prev.selected === "road" ? `Road network updated by BFS. ${connectedRoads.size} connected road tiles.` : "Construction complete.";
+              return {
+                ...prev,
+                grid,
+                money: prev.money - cost,
+                population,
+                buildings: prev.buildings + 1,
+                score: prev.score + 10,
+                done: win,
+                won: win,
+                status
+              };
+            })}>{{
+                empty: "",
+                road: "🛣️",
+                house: "🏠",
+                park: "🌳",
+                service: "🏥"
+              }[tile]}</button>))}</div></>;
+      case "solitaire":
+        return <><div className="solitaire-top"><button className="solitaire-pile stock" onClick={() => update(prev => clickSolitaire(prev, {
+              type: "stock"
+            }))}>{s.stock.length ? "🂠" : "↻"}<small>{s.stock.length || "Recycle"}</small></button><div className="solitaire-waste" onClick={() => update(prev => clickSolitaire(prev, {
+              type: "waste"
+            }))}>{s.waste.length ? <SolitaireCard card={s.waste[s.waste.length - 1]} selected={s.selected?.type === "waste"} /> : <span className="solitaire-empty">Waste</span>}</div><div className="solitaire-foundations">{s.foundations.map((pile, i) => <button key={i} className="solitaire-pile foundation" onClick={() => update(prev => clickSolitaire(prev, {
+                type: "foundation",
+                pile: i
+              }))}>{pile.length ? <SolitaireCard card={pile[pile.length - 1]} /> : <span>{["♠", "♥", "♦", "♣"][i]}</span>}</button>)}</div></div><div className="solitaire-tableau">{s.tableau.map((pile, i) => <div className="solitaire-column" key={i} onClick={() => {
+              if (!pile.length && s.selected) update(prev => clickSolitaire(prev, {
+                type: "tableau",
+                pile: i,
+                index: 0
+              }));
+            }}>{pile.length ? pile.map((card, j) => <button key={card.id} className={`solitaire-card ${card.faceUp ? "face-up" : "face-down"} ${s.selected?.type === "tableau" && s.selected.pile === i && s.selected.index === j ? "selected" : ""}`} style={{
+                top: j * 22,
+                zIndex: j + 1
+              }} onClick={event => {
+                event.stopPropagation();
+                update(prev => clickSolitaire(prev, {
+                  type: "tableau",
+                  pile: i,
+                  index: j
+                }));
+              }}>{card.faceUp ? <SolitaireCard card={card} /> : "🂠"}</button>) : <span className="solitaire-empty">K</span>}</div>)}</div><p className="board-hint">Select a face-up card or stack, then select a legal column. Foundations accept A→K by suit.</p></>;
+      case "maze-solver":
+        {
+          const pathSet = new Set(s.path.map(point => `${point.x},${point.y}`));
+          const visitedSet = new Set(s.visited.map(point => `${point.x},${point.y}`));
+          return <><div className="maze-tools">{["BFS", "DFS", "Dijkstra", "A*"].map(algorithm => <button key={algorithm} className={s.algorithm === algorithm ? "active" : ""} onClick={() => update(prev => {
+                const result = solveMaze(prev.grid, algorithm);
+                return {
+                  ...prev,
+                  algorithm,
+                  path: result.path,
+                  visited: result.visited,
+                  pathCost: result.cost,
+                  explored: result.explored,
+                  status: result.path.length ? `${algorithm}: ${result.path.length - 1} moves · cost ${result.cost} · ${result.explored} explored.` : `${algorithm} found no route.`
+                };
+              })}>{algorithm}</button>)}<button className="arcade-primary" onClick={() => update(prev => {
+                const result = solveMaze(prev.grid, prev.algorithm);
+                const won = result.path.length > 0;
+                return {
+                  ...prev,
+                  ...result,
+                  path: result.path,
+                  visited: result.visited,
+                  pathCost: result.cost,
+                  explored: result.explored,
+                  player: won ? {
+                    ...prev.goal
+                  } : prev.player,
+                  done: won,
+                  won,
+                  score: prev.score + (won ? result.path.length * 2 : 0),
+                  status: won ? `${prev.algorithm} completed the maze · cost ${result.cost} · explored ${result.explored}.` : "No route found."
+                };
+              })}>AUTO SOLVE ↗</button></div><div className="maze-metrics"><span>Explored: <b>{s.explored || 0}</b></span><span>Route cost: <b>{s.pathCost || 0}</b></span><span>Terrain: <b>1–4</b></span></div><div className="maze-board">{s.grid.flatMap((row, y) => row.map((wall, x) => {
+                const key = `${x},${y}`;
+                const cost = mazeCellCost(x, y);
+                return <span key={key} title={wall ? "Wall" : `Terrain entry cost: ${cost}`} className={`maze-cell ${wall ? "wall" : `terrain-${cost}`} ${visitedSet.has(key) ? "visited" : ""} ${pathSet.has(key) ? "path" : ""} ${samePos(s.player, {
+                  x,
+                  y
+                }) ? "player" : ""} ${samePos(s.goal, {
+                  x,
+                  y
+                }) ? "goal" : ""}`}>{samePos(s.player, {
+                    x,
+                    y
+                  }) ? "●" : samePos(s.goal, {
+                    x,
+                    y
+                  }) ? "⚑" : ""}</span>;
+              }))}</div></>;
+        }
+      default:
+        return <p>Choose a game to begin.</p>;
     }
   };
   return <div className="arcade-play-shell">
-    <div className="arcade-hud"><div className="arcade-hud-stat"><span>LEVEL</span><strong>{String(level).padStart(3,"0")} / 100</strong></div><div className="arcade-hud-stat"><span>OBJECTIVE</span><strong>{game.objective}</strong></div><div className="arcade-hud-stat"><span>MOVES</span><strong>{session.moves}</strong></div><div className="arcade-hud-stat"><span>STATUS</span><strong>{session.done?(session.won?"CLEARED":"FAILED"):"IN PROGRESS"}</strong></div><div className="arcade-hud-stat"><span>SCORE</span><strong>{session.score.toLocaleString()}</strong></div></div>
-    <div className={`game-surface game-${game.id}`}><div className="game-surface-head"><div><span className="arcade-kicker">LEVEL {String(level).padStart(3,"0")} · DSA PLAYGROUND</span><h3>{game.title}</h3><p>{session.status}</p></div><span className={`game-state-pill ${session.done?(session.won?"win":"loss"):"live"}`}>{session.done?(session.won?"LEVEL CLEARED":"TRY AGAIN"):"LIVE"}</span></div>{renderSurface()}{["tetris","snake","pac-man","2048","portal-puzzle","maze-solver"].includes(game.id)&&<div className="game-dpad" aria-label="Touch controls"><button onClick={()=>handleDirection("up")} aria-label="Up">▲</button><div><button onClick={()=>handleDirection("left")} aria-label="Left">◀</button><button onClick={()=>handleDirection("down")} aria-label="Down">▼</button><button onClick={()=>handleDirection("right")} aria-label="Right">▶</button></div></div>}{session.done&&<div className={`game-result ${session.won?"success":"failure"}`}><strong>{session.won?"LEVEL COMPLETE":"RUN OVER"}</strong><span>{session.won?`+${session.score} XP · Level ${level} cleared`:session.status}</span></div>}</div>
-    <div className="arcade-controls-row"><div><span className="arcade-kbd">⌨</span><p><strong>HOW TO PLAY</strong><br/>{game.controls}</p></div><div className="arcade-action-group"><button className="arcade-secondary" onClick={reset}>↻ Restart level</button>{session.done&&!session.won&&<button className="arcade-primary" onClick={reset}>Retry ↻</button>}{session.done&&session.won&&level<MAX_LEVEL&&<button className="arcade-primary" onClick={()=>onWin?.(session.score,"continue")}>Continue →</button>}</div></div>
+    <div className="arcade-hud"><div className="arcade-hud-stat"><span>LEVEL</span><strong>{String(level).padStart(3, "0")} / 100</strong></div><div className="arcade-hud-stat"><span>OBJECTIVE</span><strong>{game.objective}</strong></div><div className="arcade-hud-stat"><span>MOVES</span><strong>{session.moves}</strong></div><div className="arcade-hud-stat"><span>STATUS</span><strong>{session.done ? session.won ? "CLEARED" : "FAILED" : "IN PROGRESS"}</strong></div><div className="arcade-hud-stat"><span>SCORE</span><strong>{session.score.toLocaleString()}</strong></div></div>
+    <div className={`game-surface game-${game.id}`}><div className="game-surface-head"><div><span className="arcade-kicker">LEVEL {String(level).padStart(3, "0")} · DSA PLAYGROUND</span><h3>{game.title}</h3><p>{session.status}</p></div><span className={`game-state-pill ${session.done ? session.won ? "win" : "loss" : "live"}`}>{session.done ? session.won ? "LEVEL CLEARED" : "TRY AGAIN" : "LIVE"}</span></div>{renderSurface()}{["tetris", "snake", "pac-man", "2048", "portal-puzzle", "maze-solver"].includes(game.id) && <div className="game-dpad" aria-label="Touch controls"><button onClick={() => handleDirection("up")} aria-label="Up">▲</button><div><button onClick={() => handleDirection("left")} aria-label="Left">◀</button><button onClick={() => handleDirection("down")} aria-label="Down">▼</button><button onClick={() => handleDirection("right")} aria-label="Right">▶</button></div></div>}{session.done && <div className={`game-result ${session.won ? "success" : "failure"}`}><strong>{session.won ? "LEVEL COMPLETE" : "RUN OVER"}</strong><span>{session.won ? `+${session.score} XP · Level ${level} cleared` : session.status}</span></div>}</div>
+    <div className="arcade-controls-row"><div><span className="arcade-kbd">⌨</span><p><strong>HOW TO PLAY</strong><br />{game.controls}</p></div><div className="arcade-action-group"><button className="arcade-secondary" onClick={reset}>↻ Restart level</button>{session.done && !session.won && <button className="arcade-primary" onClick={reset}>Retry ↻</button>}{session.done && session.won && level < MAX_LEVEL && <button className="arcade-primary" onClick={() => onWin?.(session.score, "continue")}>Continue →</button>}</div></div>
   </div>;
 }
-function SolitaireCard({card,selected=false}) { return <span className={`card-face ${getCardColor(card)} ${selected?"selected":""}`}><small>{({1:"A",11:"J",12:"Q",13:"K"})[card.rank]||card.rank}{card.suit}</small><b>{card.suit}</b><small>{({1:"A",11:"J",12:"Q",13:"K"})[card.rank]||card.rank}{card.suit}</small></span>; }
-
-function defaultProgress() { return Object.fromEntries(GAME_CATALOG.map((game)=>[game.id,{currentLevel:1,highestUnlockedLevel:1,totalScore:0,victories:0}])); }
-function getLocalProgress(email) { try { const saved=JSON.parse(localStorage.getItem(`communex.arcade.${email}`)||"{}"); const base=defaultProgress(); Object.keys(base).forEach((id)=>{if(saved[id])base[id]={...base[id],...saved[id],currentLevel:clamp(Number(saved[id].currentLevel)||1,1,MAX_LEVEL),highestUnlockedLevel:clamp(Number(saved[id].highestUnlockedLevel)||1,1,MAX_LEVEL)};});return base;} catch {return defaultProgress();} }
-
+function SolitaireCard({
+  card,
+  selected = false
+}) {
+  return <span className={`card-face ${getCardColor(card)} ${selected ? "selected" : ""}`}><small>{{
+        1: "A",
+        11: "J",
+        12: "Q",
+        13: "K"
+      }[card.rank] || card.rank}{card.suit}</small><b>{card.suit}</b><small>{{
+        1: "A",
+        11: "J",
+        12: "Q",
+        13: "K"
+      }[card.rank] || card.rank}{card.suit}</small></span>;
+}
+function defaultProgress() {
+  return Object.fromEntries(GAME_CATALOG.map(game => [game.id, {
+    currentLevel: 1,
+    highestUnlockedLevel: 1,
+    totalScore: 0,
+    victories: 0
+  }]));
+}
+function getLocalProgress(email) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(`communex.arcade.${email}`) || "{}");
+    const base = defaultProgress();
+    Object.keys(base).forEach(id => {
+      if (saved[id]) base[id] = {
+        ...base[id],
+        ...saved[id],
+        currentLevel: clamp(Number(saved[id].currentLevel) || 1, 1, MAX_LEVEL),
+        highestUnlockedLevel: clamp(Number(saved[id].highestUnlockedLevel) || 1, 1, MAX_LEVEL)
+      };
+    });
+    return base;
+  } catch {
+    return defaultProgress();
+  }
+}
 export default function Games() {
-  const email=localStorage.getItem("communex.email")||"account";
-  const [selectedId,setSelectedId]=useState("tetris"); const [progress,setProgress]=useState(()=>getLocalProgress(email)); const [level,setLevel]=useState(1); const [resetKey,setResetKey]=useState(0); const [showLevels,setShowLevels]=useState(false); const [showReset,setShowReset]=useState(false); const [error,setError]=useState(""); const [syncStatus,setSyncStatus]=useState("local"); const [leaderboard,setLeaderboard]=useState([]); const [leaderboardBusy,setLeaderboardBusy]=useState(false); const [tab,setTab]=useState("all"); const selectedIdRef=useRef(selectedId);
-  const selected=useMemo(()=>GAME_CATALOG.find((game)=>game.id===selectedId)||GAME_CATALOG[0],[selectedId]); const currentProgress=progress[selectedId]||{currentLevel:1,highestUnlockedLevel:1,totalScore:0,victories:0};
-  useEffect(()=>{let active=true;api.get("/games/progress/me").then(({data})=>{if(!active||!Array.isArray(data))return;const merged={...getLocalProgress(email)};data.forEach((row)=>{if(row.game&&GAME_CATALOG.some((game)=>game.id===row.game))merged[row.game]={currentLevel:clamp(row.currentLevel||1,1,MAX_LEVEL),highestUnlockedLevel:clamp(row.highestUnlockedLevel||1,1,MAX_LEVEL),totalScore:row.totalScore||0,victories:row.victories||0};});setProgress(merged);setLevel(merged[selectedIdRef.current]?.currentLevel||1);localStorage.setItem(`communex.arcade.${email}`,JSON.stringify(merged));setSyncStatus("synced");}).catch(()=>{if(active)setSyncStatus("local");});return()=>{active=false;};},[email]);
-  const persistProgress=useCallback(async(gameId,next)=>{const merged={...getLocalProgress(email),[gameId]:next};localStorage.setItem(`communex.arcade.${email}`,JSON.stringify(merged));setProgress(merged);try{await api.put(`/games/progress/${gameId}`,next);setSyncStatus("synced");}catch{setSyncStatus("local");}},[email]);
-  const winLevel=useCallback(async(gameId,wonLevel,score)=>{if(wonLevel==="continue"){setLevel((current)=>Math.min(MAX_LEVEL,current+1));setResetKey((value)=>value+1);return;}const previous=getLocalProgress(email)[gameId]||{currentLevel:1,highestUnlockedLevel:1,totalScore:0,victories:0};const highestUnlockedLevel=Math.min(MAX_LEVEL,Math.max(previous.highestUnlockedLevel||1,wonLevel+1));const currentLevel=Math.min(MAX_LEVEL,Math.max(wonLevel<MAX_LEVEL?wonLevel+1:MAX_LEVEL,previous.currentLevel||1));const next={currentLevel,highestUnlockedLevel,totalScore:(previous.totalScore||0)+Math.max(0,score||0),victories:(previous.victories||0)+1};await persistProgress(gameId,next);try{await api.post("/games/scores",{game:gameId,score:Math.min(1000000,Math.max(0,Math.round(score||0))),durationSeconds:0});}catch{/* Local progression still works without score sync. */}setError("");},[email,persistProgress]);
-  const selectGame=(gameId)=>{selectedIdRef.current=gameId;setSelectedId(gameId);setLevel(progress[gameId]?.currentLevel||1);setError("");setShowLevels(false);setLeaderboard([]);};
-  const chooseLevel=(item)=>{const current=progress[selectedId]||{currentLevel:1,highestUnlockedLevel:1,totalScore:0,victories:0};if(item>current.highestUnlockedLevel)return;setLevel(item);setResetKey((value)=>value+1);void persistProgress(selectedId,{...current,currentLevel:item});};
-  const resetAll=async()=>{const blank=defaultProgress();localStorage.setItem(`communex.arcade.${email}`,JSON.stringify(blank));setProgress(blank);setLevel(1);setResetKey((value)=>value+1);setShowReset(false);setError("");try{await api.delete("/games/progress");setSyncStatus("synced");}catch{setSyncStatus("local");}};
-  const loadLeaderboard=async()=>{setLeaderboardBusy(true);try{const {data}=await api.get(`/games/leaderboard?game=${encodeURIComponent(selectedId)}`);setLeaderboard(Array.isArray(data)?data:[]);}catch(e){setError(errorMessage(e,"Leaderboard is unavailable while the server is offline."));}finally{setLeaderboardBusy(false);}};
-  const completed=GAME_CATALOG.reduce((sum,game)=>sum+Math.max(0,(progress[game.id]?.highestUnlockedLevel||1)-1),0);const xp=GAME_CATALOG.reduce((sum,game)=>sum+(progress[game.id]?.totalScore||0),0);const victories=GAME_CATALOG.reduce((sum,game)=>sum+(progress[game.id]?.victories||0),0);
+  const email = localStorage.getItem("communex.email") || "account";
+  const [selectedId, setSelectedId] = useState("tetris");
+  const [progress, setProgress] = useState(() => getLocalProgress(email));
+  const [level, setLevel] = useState(1);
+  const [resetKey, setResetKey] = useState(0);
+  const [showLevels, setShowLevels] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [error, setError] = useState("");
+  const [syncStatus, setSyncStatus] = useState("local");
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardBusy, setLeaderboardBusy] = useState(false);
+  const [tab, setTab] = useState("all");
+  const selectedIdRef = useRef(selectedId);
+  const selected = useMemo(() => GAME_CATALOG.find(game => game.id === selectedId) || GAME_CATALOG[0], [selectedId]);
+  const currentProgress = progress[selectedId] || {
+    currentLevel: 1,
+    highestUnlockedLevel: 1,
+    totalScore: 0,
+    victories: 0
+  };
+  useEffect(() => {
+    let active = true;
+    api.get("/games/progress/me").then(({
+      data
+    }) => {
+      if (!active || !Array.isArray(data)) return;
+      const merged = {
+        ...getLocalProgress(email)
+      };
+      data.forEach(row => {
+        if (row.game && GAME_CATALOG.some(game => game.id === row.game)) merged[row.game] = {
+          currentLevel: clamp(row.currentLevel || 1, 1, MAX_LEVEL),
+          highestUnlockedLevel: clamp(row.highestUnlockedLevel || 1, 1, MAX_LEVEL),
+          totalScore: row.totalScore || 0,
+          victories: row.victories || 0
+        };
+      });
+      setProgress(merged);
+      setLevel(merged[selectedIdRef.current]?.currentLevel || 1);
+      localStorage.setItem(`communex.arcade.${email}`, JSON.stringify(merged));
+      setSyncStatus("synced");
+    }).catch(() => {
+      if (active) setSyncStatus("local");
+    });
+    return () => {
+      active = false;
+    };
+  }, [email]);
+  const persistProgress = useCallback(async (gameId, next) => {
+    const merged = {
+      ...getLocalProgress(email),
+      [gameId]: next
+    };
+    localStorage.setItem(`communex.arcade.${email}`, JSON.stringify(merged));
+    setProgress(merged);
+    try {
+      await api.put(`/games/progress/${gameId}`, next);
+      setSyncStatus("synced");
+    } catch {
+      setSyncStatus("local");
+    }
+  }, [email]);
+  const winLevel = useCallback(async (gameId, wonLevel, score) => {
+    if (wonLevel === "continue") {
+      setLevel(current => Math.min(MAX_LEVEL, current + 1));
+      setResetKey(value => value + 1);
+      return;
+    }
+    const previous = getLocalProgress(email)[gameId] || {
+      currentLevel: 1,
+      highestUnlockedLevel: 1,
+      totalScore: 0,
+      victories: 0
+    };
+    const highestUnlockedLevel = Math.min(MAX_LEVEL, Math.max(previous.highestUnlockedLevel || 1, wonLevel + 1));
+    const currentLevel = Math.min(MAX_LEVEL, Math.max(wonLevel < MAX_LEVEL ? wonLevel + 1 : MAX_LEVEL, previous.currentLevel || 1));
+    const next = {
+      currentLevel,
+      highestUnlockedLevel,
+      totalScore: (previous.totalScore || 0) + Math.max(0, score || 0),
+      victories: (previous.victories || 0) + 1
+    };
+    await persistProgress(gameId, next);
+    try {
+      await api.post("/games/scores", {
+        game: gameId,
+        score: Math.min(1000000, Math.max(0, Math.round(score || 0))),
+        durationSeconds: 0
+      });
+    } catch {/* Local progression still works without score sync. */}
+    setError("");
+  }, [email, persistProgress]);
+  const selectGame = gameId => {
+    selectedIdRef.current = gameId;
+    setSelectedId(gameId);
+    setLevel(progress[gameId]?.currentLevel || 1);
+    setError("");
+    setShowLevels(false);
+    setLeaderboard([]);
+  };
+  const chooseLevel = item => {
+    const current = progress[selectedId] || {
+      currentLevel: 1,
+      highestUnlockedLevel: 1,
+      totalScore: 0,
+      victories: 0
+    };
+    if (item > current.highestUnlockedLevel) return;
+    setLevel(item);
+    setResetKey(value => value + 1);
+    void persistProgress(selectedId, {
+      ...current,
+      currentLevel: item
+    });
+  };
+  const resetAll = async () => {
+    const blank = defaultProgress();
+    localStorage.setItem(`communex.arcade.${email}`, JSON.stringify(blank));
+    setProgress(blank);
+    setLevel(1);
+    setResetKey(value => value + 1);
+    setShowReset(false);
+    setError("");
+    try {
+      await api.delete("/games/progress");
+      setSyncStatus("synced");
+    } catch {
+      setSyncStatus("local");
+    }
+  };
+  const loadLeaderboard = async () => {
+    setLeaderboardBusy(true);
+    try {
+      const {
+        data
+      } = await api.get(`/games/leaderboard?game=${encodeURIComponent(selectedId)}`);
+      setLeaderboard(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(errorMessage(e, "Leaderboard is unavailable while the server is offline."));
+    } finally {
+      setLeaderboardBusy(false);
+    }
+  };
+  const completed = GAME_CATALOG.reduce((sum, game) => sum + Math.max(0, (progress[game.id]?.highestUnlockedLevel || 1) - 1), 0);
+  const xp = GAME_CATALOG.reduce((sum, game) => sum + (progress[game.id]?.totalScore || 0), 0);
+  const victories = GAME_CATALOG.reduce((sum, game) => sum + (progress[game.id]?.victories || 0), 0);
   return <div className="section-stack arcade-page">
-    <section className="arcade-hero"><div className="arcade-hero-copy"><div className="arcade-kicker"><span className="live-dot"/> COMMUNEX ARCADE <b>·</b> DSA SEASON</div><h1>Sixteen worlds.<br/><em>One smart player.</em></h1><p>Play 16 original DSA-inspired game modes with 100 progressive levels each. Solve puzzles, build worlds, outsmart opponents and watch your algorithms come to life.</p><div className="arcade-hero-actions"><button className="arcade-primary" onClick={()=>{setTab("all");document.querySelector(".arcade-library")?.scrollIntoView({behavior:"smooth",block:"start"});}}>▶ &nbsp; Browse the games</button><span className="arcade-online"><i/>{syncStatus==="synced"?"ACCOUNT SYNC ACTIVE":"LOCAL SAVE ACTIVE"}</span></div><div className="arcade-hero-stats"><div><strong>{completed}<small> / 1600</small></strong><span>LEVELS CLEARED</span></div><div><strong>{xp.toLocaleString()}</strong><span>TOTAL XP EARNED</span></div><div><strong>{victories}</strong><span>LEVEL WINS</span></div></div></div><div className="arcade-hero-art" aria-hidden="true"><div className="arcade-art-sun"/><div className="arcade-art-ring ring-one"/><div className="arcade-art-ring ring-two"/><div className="arcade-art-building building-one"/><div className="arcade-art-building building-two"/><div className="arcade-art-building building-three"/><div className="arcade-art-ground"/><div className="arcade-art-soldier"><span className="soldier-pack"/><span className="soldier-body"/><span className="soldier-head"/><span className="soldier-gun"/></div><div className="arcade-art-crosshair">✦</div><div className="arcade-art-tag tag-top">16 GAMES <b>·</b> 100 LEVELS</div><div className="arcade-art-tag tag-bottom"><i/> DSA ARCADE ONLINE</div><div className="arcade-art-minimap"><span/><i/><b/></div></div></section>
-    <section className="arcade-stats-row"><div className="arcade-mini-stat"><span className="arcade-mini-icon">🎮</span><div><strong>16</strong><small>GAME WORLDS</small></div></div><div className="arcade-mini-stat"><span className="arcade-mini-icon">◈</span><div><strong>100</strong><small>LEVELS EACH</small></div></div><div className="arcade-mini-stat"><span className="arcade-mini-icon">♧</span><div><strong>{victories.toString().padStart(2,"0")}</strong><small>LEVEL WINS</small></div></div><div className="arcade-mini-stat"><span className="arcade-mini-icon">◉</span><div><strong>{syncStatus==="synced"?"SYNCED":"READY"}</strong><small>ACCOUNT SAVE</small></div></div><button className="arcade-reset-link" onClick={()=>setShowReset(true)}>↻ Reset progress</button></section>
-    {error&&<div className="status-message info" role="status">{error}</div>}
-    <section className="arcade-library"><div className="arcade-section-heading"><div><div className="arcade-kicker">THE GAME LIBRARY</div><h2>Choose your game</h2><p>Each game has its own mechanics, controls and level objective — with the DSA concept doing real work behind the scenes.</p></div><div className="arcade-tabs"><button className={tab==="featured"?"active":""} onClick={()=>setTab("featured")}>FEATURED</button><button className={tab==="all"?"active":""} onClick={()=>setTab("all")}>ALL GAMES · 16</button></div></div><div className="arcade-game-grid">{GAME_CATALOG.filter((game,index)=>tab==="all"||index<6).map((game,index)=>{const record=progress[game.id]||{currentLevel:1,highestUnlockedLevel:1,totalScore:0,victories:0};const active=selectedId===game.id;return <button key={game.id} onClick={()=>selectGame(game.id)} className={`arcade-game-card ${active?"is-active":""} arcade-card-${index%5}`} style={{"--game-accent":game.accent}}><div className="arcade-card-top"><span className="arcade-game-symbol">{game.icon}</span><span className="arcade-card-level">LVL {String(record.currentLevel).padStart(3,"0")}</span></div><div className="arcade-card-scene"><div className="scene-grid"/><div className="scene-sun"/><div className="scene-shape shape-a"/><div className="scene-shape shape-b"/><div className="scene-shape shape-c"/><span className="scene-horizon"/></div><div className="arcade-card-body"><span className="arcade-card-genre">{game.genre}</span><h3>{game.title}</h3><p>{game.desc}</p><div className="arcade-card-footer"><span><i/>{record.highestUnlockedLevel>1?`${record.highestUnlockedLevel-1}/100 CLEARED`:"READY TO PLAY"}</span><b>{active?"SELECTED ✓":"PLAY ↗"}</b></div><div className="arcade-progress"><i style={{width:`${Math.max(0,(record.highestUnlockedLevel-1)/MAX_LEVEL*100)}%`}}/></div></div></button>;})}</div></section>
-    <section className="arcade-mission-layout" id="active-mission"><div className="arcade-main-mission"><div className="arcade-mission-heading"><div><div className="arcade-kicker">GAME STATION / {String(GAME_CATALOG.findIndex((game)=>game.id===selectedId)+1).padStart(2,"0")}</div><h2>{selected.title}</h2><p>{selected.desc}</p></div><span className="arcade-mission-chip">{selected.genre}</span></div><div className="arcade-dsa-strip"><span className="arcade-dsa-icon">⌘</span><div><strong>DSA UNDER THE HOOD</strong><p>{selected.dsa}. The algorithm is part of the gameplay, not just a label.</p></div></div><div className="arcade-active-level-row"><div><span>ACTIVE LEVEL</span><strong>{String(level).padStart(3,"0")} <small>/ 100</small></strong></div><div className="arcade-level-progress"><i style={{width:`${Math.max(0,(level-1)/MAX_LEVEL*100)}%`}}/></div><button className="arcade-secondary" onClick={()=>setShowLevels((value)=>!value)}>{showLevels?"Hide levels ▴":"Choose level ▾"}</button></div>{showLevels&&<div className="arcade-level-picker"><div className="arcade-level-picker-head"><strong>LEVEL SELECT</strong><small>Clear a level to unlock the next one</small></div><div className="arcade-level-grid">{Array.from({length:MAX_LEVEL},(_,i)=>i+1).map((item)=>{const unlocked=item<=currentProgress.highestUnlockedLevel;return <button key={item} disabled={!unlocked} className={`${item===level?"current":""} ${!unlocked?"locked":""} ${item<currentProgress.highestUnlockedLevel?"cleared":""}`} onClick={()=>chooseLevel(item)}>{unlocked?item:"🔒"}</button>;})}</div></div>}<GameSurface key={`${selectedId}-${level}-${resetKey}`} game={selected} level={level} onWin={(score,action)=>action==="continue"?winLevel(selectedId,"continue",0):winLevel(selectedId,level,score)}/></div>
-      <aside className="arcade-side-panel"><div className="arcade-side-card arcade-objective-card"><div className="arcade-kicker">CURRENT BRIEF</div><h3>Level objective</h3><p>{selected.objective}</p><div className="arcade-objective-meta"><span>⌖ &nbsp; {selected.genre}</span><span>◈ &nbsp; XP on clear</span></div><div className="arcade-control-note"><strong>CONTROL GUIDE</strong><p>{selected.controls}</p><small>Keyboard and touch-friendly buttons where supported.</small></div></div><div className="arcade-side-card arcade-progress-card"><div className="arcade-side-title"><div><div className="arcade-kicker">YOUR RECORD</div><h3>Game progress</h3></div><span className="arcade-record-dot"/></div><div className="arcade-record-row"><span>Highest unlocked</span><strong>{currentProgress.highestUnlockedLevel} <small>/ 100</small></strong></div><div className="arcade-record-row"><span>Level wins</span><strong>{currentProgress.victories}</strong></div><div className="arcade-record-row"><span>XP earned</span><strong>{(currentProgress.totalScore||0).toLocaleString()}</strong></div><div className="arcade-record-bar"><i style={{width:`${(Math.max(0,currentProgress.highestUnlockedLevel-1)/MAX_LEVEL)*100}%`}}/></div><p className="arcade-record-foot">Progress is stored for <b>{email}</b>. It syncs to your CommuneX account when the backend supports the game.</p></div><div className="arcade-side-card arcade-leaderboard-card"><div className="arcade-side-title"><div><div className="arcade-kicker">COMMUNITY RANK</div><h3>Leaderboard</h3></div><span>↗</span></div><p>Compare recorded scores for this game.</p><button className="arcade-secondary full-width" onClick={loadLeaderboard} disabled={leaderboardBusy}>{leaderboardBusy?"Loading…":"Load leaderboard"}</button>{leaderboard.length>0&&<div className="arcade-leader-list">{leaderboard.slice(0,5).map((item,i)=><div key={item.id||`${item.playerName}-${i}`}><span>{String(i+1).padStart(2,"0")}</span><b>{item.playerName||"Player"}</b><strong>{item.score} XP</strong></div>)}</div>}{leaderboard.length===0&&<small className="arcade-muted">Load the live leaderboard while signed in.</small>}</div></aside></section>
+    <section className="arcade-hero"><div className="arcade-hero-copy"><div className="arcade-kicker"><span className="live-dot" /> COMMUNEX ARCADE <b>·</b> DSA SEASON</div><h1>Sixteen worlds.<br /><em>One smart player.</em></h1><p>Play 16 original DSA-inspired game modes with 100 progressive levels each. Solve puzzles, build worlds, outsmart opponents and watch your algorithms come to life.</p><div className="arcade-hero-actions"><button className="arcade-primary" onClick={() => {
+            setTab("all");
+            document.querySelector(".arcade-library")?.scrollIntoView({
+              behavior: "smooth",
+              block: "start"
+            });
+          }}>▶ &nbsp; Browse the games</button><span className="arcade-online"><i />{syncStatus === "synced" ? "ACCOUNT SYNC ACTIVE" : "LOCAL SAVE ACTIVE"}</span></div><div className="arcade-hero-stats"><div><strong>{completed}<small> / 1600</small></strong><span>LEVELS CLEARED</span></div><div><strong>{xp.toLocaleString()}</strong><span>TOTAL XP EARNED</span></div><div><strong>{victories}</strong><span>LEVEL WINS</span></div></div></div><div className="arcade-hero-art" aria-hidden="true"><div className="arcade-art-sun" /><div className="arcade-art-ring ring-one" /><div className="arcade-art-ring ring-two" /><div className="arcade-art-building building-one" /><div className="arcade-art-building building-two" /><div className="arcade-art-building building-three" /><div className="arcade-art-ground" /><div className="arcade-art-soldier"><span className="soldier-pack" /><span className="soldier-body" /><span className="soldier-head" /><span className="soldier-gun" /></div><div className="arcade-art-crosshair">✦</div><div className="arcade-art-tag tag-top">16 GAMES <b>·</b> 100 LEVELS</div><div className="arcade-art-tag tag-bottom"><i /> DSA ARCADE ONLINE</div><div className="arcade-art-minimap"><span /><i /><b /></div></div></section>
+    <section className="arcade-stats-row"><div className="arcade-mini-stat"><span className="arcade-mini-icon">🎮</span><div><strong>16</strong><small>GAME WORLDS</small></div></div><div className="arcade-mini-stat"><span className="arcade-mini-icon">◈</span><div><strong>100</strong><small>LEVELS EACH</small></div></div><div className="arcade-mini-stat"><span className="arcade-mini-icon">♧</span><div><strong>{victories.toString().padStart(2, "0")}</strong><small>LEVEL WINS</small></div></div><div className="arcade-mini-stat"><span className="arcade-mini-icon">◉</span><div><strong>{syncStatus === "synced" ? "SYNCED" : "READY"}</strong><small>ACCOUNT SAVE</small></div></div><button className="arcade-reset-link" onClick={() => setShowReset(true)}>↻ Reset progress</button></section>
+    {error && <div className="status-message info" role="status">{error}</div>}
+    <section className="arcade-library"><div className="arcade-section-heading"><div><div className="arcade-kicker">THE GAME LIBRARY</div><h2>Choose your game</h2><p>Each game has its own mechanics, controls and level objective — with the DSA concept doing real work behind the scenes.</p></div><div className="arcade-tabs"><button className={tab === "featured" ? "active" : ""} onClick={() => setTab("featured")}>FEATURED</button><button className={tab === "all" ? "active" : ""} onClick={() => setTab("all")}>ALL GAMES · 16</button></div></div><div className="arcade-game-grid">{GAME_CATALOG.filter((game, index) => tab === "all" || index < 6).map((game, index) => {
+          const record = progress[game.id] || {
+            currentLevel: 1,
+            highestUnlockedLevel: 1,
+            totalScore: 0,
+            victories: 0
+          };
+          const active = selectedId === game.id;
+          return <button key={game.id} onClick={() => selectGame(game.id)} className={`arcade-game-card ${active ? "is-active" : ""} arcade-card-${index % 5}`} style={{
+            "--game-accent": game.accent
+          }}><div className="arcade-card-top"><span className="arcade-game-symbol">{game.icon}</span><span className="arcade-card-level">LVL {String(record.currentLevel).padStart(3, "0")}</span></div><div className="arcade-card-scene"><div className="scene-grid" /><div className="scene-sun" /><div className="scene-shape shape-a" /><div className="scene-shape shape-b" /><div className="scene-shape shape-c" /><span className="scene-horizon" /></div><div className="arcade-card-body"><span className="arcade-card-genre">{game.genre}</span><h3>{game.title}</h3><p>{game.desc}</p><div className="arcade-card-footer"><span><i />{record.highestUnlockedLevel > 1 ? `${record.highestUnlockedLevel - 1}/100 CLEARED` : "READY TO PLAY"}</span><b>{active ? "SELECTED ✓" : "PLAY ↗"}</b></div><div className="arcade-progress"><i style={{
+                  width: `${Math.max(0, (record.highestUnlockedLevel - 1) / MAX_LEVEL * 100)}%`
+                }} /></div></div></button>;
+        })}</div></section>
+    <section className="arcade-mission-layout" id="active-mission"><div className="arcade-main-mission"><div className="arcade-mission-heading"><div><div className="arcade-kicker">GAME STATION / {String(GAME_CATALOG.findIndex(game => game.id === selectedId) + 1).padStart(2, "0")}</div><h2>{selected.title}</h2><p>{selected.desc}</p></div><span className="arcade-mission-chip">{selected.genre}</span></div><div className="arcade-dsa-strip"><span className="arcade-dsa-icon">⌘</span><div><strong>DSA UNDER THE HOOD</strong><p>{selected.dsa}. The listed data structure or algorithm is used by this game mode.</p></div></div><div className="arcade-active-level-row"><div><span>ACTIVE LEVEL</span><strong>{String(level).padStart(3, "0")} <small>/ 100</small></strong></div><div className="arcade-level-progress"><i style={{
+              width: `${Math.max(0, (level - 1) / MAX_LEVEL * 100)}%`
+            }} /></div><button className="arcade-secondary" onClick={() => setShowLevels(value => !value)}>{showLevels ? "Hide levels ▴" : "Choose level ▾"}</button></div>{showLevels && <div className="arcade-level-picker"><div className="arcade-level-picker-head"><strong>LEVEL SELECT</strong><small>Clear a level to unlock the next one</small></div><div className="arcade-level-grid">{Array.from({
+              length: MAX_LEVEL
+            }, (_, i) => i + 1).map(item => {
+              const unlocked = item <= currentProgress.highestUnlockedLevel;
+              return <button key={item} disabled={!unlocked} className={`${item === level ? "current" : ""} ${!unlocked ? "locked" : ""} ${item < currentProgress.highestUnlockedLevel ? "cleared" : ""}`} onClick={() => chooseLevel(item)}>{unlocked ? item : "🔒"}</button>;
+            })}</div></div>}<GameSurface key={`${selectedId}-${level}-${resetKey}`} game={selected} level={level} onWin={(score, action) => action === "continue" ? winLevel(selectedId, "continue", 0) : winLevel(selectedId, level, score)} /></div>
+      <aside className="arcade-side-panel"><div className="arcade-side-card arcade-objective-card"><div className="arcade-kicker">CURRENT BRIEF</div><h3>Level objective</h3><p>{selected.objective}</p><div className="arcade-objective-meta"><span>⌖ &nbsp; {selected.genre}</span><span>◈ &nbsp; XP on clear</span></div><div className="arcade-control-note"><strong>CONTROL GUIDE</strong><p>{selected.controls}</p><small>Keyboard and touch-friendly buttons where supported.</small></div></div><div className="arcade-side-card arcade-progress-card"><div className="arcade-side-title"><div><div className="arcade-kicker">YOUR RECORD</div><h3>Game progress</h3></div><span className="arcade-record-dot" /></div><div className="arcade-record-row"><span>Highest unlocked</span><strong>{currentProgress.highestUnlockedLevel} <small>/ 100</small></strong></div><div className="arcade-record-row"><span>Level wins</span><strong>{currentProgress.victories}</strong></div><div className="arcade-record-row"><span>XP earned</span><strong>{(currentProgress.totalScore || 0).toLocaleString()}</strong></div><div className="arcade-record-bar"><i style={{
+              width: `${Math.max(0, currentProgress.highestUnlockedLevel - 1) / MAX_LEVEL * 100}%`
+            }} /></div><p className="arcade-record-foot">Progress is stored for <b>{email}</b>. It syncs to your CommuneX account when the backend supports the game.</p></div><div className="arcade-side-card arcade-leaderboard-card"><div className="arcade-side-title"><div><div className="arcade-kicker">COMMUNITY RANK</div><h3>Leaderboard</h3></div><span>↗</span></div><p>Compare recorded scores for this game.</p><button className="arcade-secondary full-width" onClick={loadLeaderboard} disabled={leaderboardBusy}>{leaderboardBusy ? "Loading…" : "Load leaderboard"}</button>{leaderboard.length > 0 && <div className="arcade-leader-list">{leaderboard.slice(0, 5).map((item, i) => <div key={item.id || `${item.playerName}-${i}`}><span>{String(i + 1).padStart(2, "0")}</span><b>{item.playerName || "Player"}</b><strong>{item.score} XP</strong></div>)}</div>}{leaderboard.length === 0 && <small className="arcade-muted">Load the live leaderboard while signed in.</small>}</div></aside></section>
     <div className="arcade-footnote"><span>◈</span><p>These are original arcade implementations inspired by familiar game genres. Scores are for entertainment and never affect CommuneX community assistance priorities.</p><span>COMMUNEX ARCADE / DSA BUILD</span></div>
-    {showReset&&<div className="arcade-modal-backdrop" role="presentation" onMouseDown={(event)=>{if(event.target===event.currentTarget)setShowReset(false);}}><div className="arcade-modal" role="dialog" aria-modal="true" aria-labelledby="reset-heading"><div className="arcade-modal-symbol">↻</div><div className="arcade-kicker">DANGER ZONE</div><h2 id="reset-heading">Reset all arcade progress?</h2><p>This clears local unlocks, XP and win records for all 16 games. This can't be undone.</p><div className="arcade-modal-actions"><button className="arcade-secondary" onClick={()=>setShowReset(false)}>Keep progress</button><button className="arcade-danger" onClick={resetAll}>Reset everything</button></div></div></div>}
+    {showReset && <div className="arcade-modal-backdrop" role="presentation" onMouseDown={event => {
+      if (event.target === event.currentTarget) setShowReset(false);
+    }}><div className="arcade-modal" role="dialog" aria-modal="true" aria-labelledby="reset-heading"><div className="arcade-modal-symbol">↻</div><div className="arcade-kicker">DANGER ZONE</div><h2 id="reset-heading">Reset all arcade progress?</h2><p>This clears local unlocks, XP and win records for all 16 games. This can't be undone.</p><div className="arcade-modal-actions"><button className="arcade-secondary" onClick={() => setShowReset(false)}>Keep progress</button><button className="arcade-danger" onClick={resetAll}>Reset everything</button></div></div></div>}
   </div>;
 }
